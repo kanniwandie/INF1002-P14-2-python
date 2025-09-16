@@ -1,7 +1,7 @@
 import streamlit as st
-import datetime
-from scr.data.yfinance_client import df
-from scr.Calculations.daily_returns import dr_date_list, dr_calc
+from datetime import timedelta, datetime
+from scr.data.yfinance_client import fetch_prices
+from scr.Calculations.daily_returns import dr_calc
 
 st.set_page_config(
     page_title="Daily Returns"
@@ -16,7 +16,8 @@ selected_date_custom = st.date_input(
 )
 dropdown_date = selected_date_custom.strftime("%Y-%m-%d")
 
-if df["Date"] in dr_date_list:
+df = fetch_prices(dropdown_date, dropdown_date - timedelta(days=1), )
+if dropdown_date in df["Date"]:
     index = df["Date"].index(dropdown_date)
     if index != 0:
         daily_return = dr_calc(index)
