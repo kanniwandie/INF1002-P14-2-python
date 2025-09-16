@@ -1,6 +1,6 @@
-import csv
 import streamlit as st
 import datetime
+from scr.Calculations.daily_returns import dr_date_list, dr_calc
 
 st.set_page_config(
     page_title="Daily Returns"
@@ -18,3 +18,13 @@ selected_date_custom = st.date_input(
     format="YYYY-MM-DD"
 )
 dropdown_date = selected_date_custom.strftime("%Y-%m-%d")
+
+if dropdown_date in dr_date_list:
+    index = dr_date_list.index(dropdown_date)
+    if index != 0:
+        daily_return = dr_calc(index)
+        st.write(f"Daily return for {dropdown_date}: {daily_return:.3f}%")
+    else:
+        st.write("Unable to calculate daily return")
+else: 
+    st.write("Unable to calculate daily return")
