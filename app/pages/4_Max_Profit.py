@@ -1,91 +1,101 @@
-# app/pages/4_Max_Profit.py
 import streamlit as st
-from datetime import date
-from pathlib import Path
 import pandas as pd
-import os, sys
+import matplotlib.pyplot as plt
 
-# allow `from src...` imports when running from /app
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if ROOT not in sys.path:
-    sys.path.append(ROOT)
+from src.data.yfinance_client import fetch_prices
+from src.Calculations.max_profit import max_profit
 
-st.set_page_config(page_title="Max Profit (≤2 transactions)", page_icon="📈", layout="wide")
-st.title("📈 Max Profit — Best Time to Buy and Sell Stock III (≤ 2 transactions)")
+st.title("💰 Max Profit — LeetCode 122 (Multiple Transactions)")
 
-# imports
-try:
-    from src.data.yfinance_client import fetch_prices
-    from src.Calculations.max_profit import max_profit_with_trades
-    st.caption("Imports OK ✅")
-except Exception as e:
-    st.error("Import error ❌ — check folder/package names.")
-    st.exception(e)
+# Require global config
+if "cfg" not in st.session_state or "data" not in st.session_state or st.session_state["data"] is None:
+    st.warning("Go to **Home** to choose a ticker & date range, then click **Load Data**.")
     st.stop()
 
-# controls
-with st.form("controls", clear_on_submit=False):
-    c1, c2, c3, c4 = st.columns([2, 2, 2, 1.4])
-    with c1:
-        ticker = st.text_input("Ticker", value="AAPL").strip().upper()
-    with c2:
-        start = st.date_input("Start date", value=date(2023, 1, 1))
-    with c3:
-        end = st.date_input("End date", value=date.today())
-    with c4:
-        interval = st.selectbox("Interval", ["1d", "1wk", "1mo"], index=0)
-    run = st.form_submit_button("Compute Max Profit")
+cfg = st.session_state["cfg"]  # ticker / start / end
 
-# action
-if run:
-    try:
-        @st.cache_data(show_spinner=False)
-        def _cached_fetch(t, s, e, i):
-            return fetch_prices(t, s, e, i)
+# --- Interval control (refetch only for this page if the user wants) ---
+interval = st.selectbox("Data interval", ["1d", "1wk", "1mo"], index=0, help="Resamples prices from Yahoo Finance.")
+refetch = st.checkbox("Refetch for this interval (recommended when changing interval)", value=True)
 
-        df = _cached_fetch(ticker, str(start), str(end), interval)
+if refetch:
+    df = fetch_prices(cfg["ticker"], cfg["start"], cfg["end"], interval=interval)
+    if df is None or df.empty:
+        st.error("No data returned for this interval. Try a different one.")
+        st.stop()
+else:
+    df = st.session_state["data"].copy()
 
-        if df.empty or "Close" not in df.columns:
-            st.warning("No price data available to compute profit.")
-            st.stop()  # IMPORTANT: indented under the if
+# --- Ensure tidy columns ---
+df = df.copy()
+df["Date"] = pd.to_datetime(df["Date"])
+close = df["Close"]
+if isinstance(close, pd.DataFrame):
+    close = close.squeeze(axis=1)
+close = pd.to_numeric(close, errors="coerce")
+mask = close.notna()
+df = df.loc[mask].reset_index(drop=True)
+close = close.loc[mask].reset_index(drop=True)
 
-        # compute profit + trades (≤ 2)
-        total_profit, trades = max_profit_with_trades(df, price_col="Close", date_col="Date")
-        st.success(f"Maximum Profit (≤ 2 transactions): **${total_profit:.2f}**")
+# ---------- Greedy trade extraction: valley→peak pairs ----------
+def extract_trades(dates: pd.Series, prices: pd.Series):
+    """
+    Build the exact buy/sell pairs that produce the LeetCode 122 greedy max profit.
+    Returns a list of dicts: [{'buy_date', 'buy_price', 'sell_date', 'sell_price', 'profit'}, ...]
+    """
+    n = len(prices)
+    trades = []
+    i = 0
+    while i < n - 1:
+        # find next valley (local minimum)
+        while i < n - 1 and prices[i+1] <= prices[i]:
+            i += 1
+        buy_i = i
+        # find next peak (local maximum)
+        while i < n - 1 and prices[i+1] >= prices[i]:
+            i += 1
+        sell_i = i
+        if sell_i > buy_i:  # a valid trade
+            buy_price = float(prices[buy_i])
+            sell_price = float(prices[sell_i])
+            trades.append({
+                "buy_date": dates[buy_i].date(),
+                "buy_price": buy_price,
+                "sell_date": dates[sell_i].date(),
+                "sell_price": sell_price,
+                "profit": sell_price - buy_price
+            })
+        i += 1
+    return trades
 
-        if trades:
-            rows = []
-            for i, t in enumerate(trades, 1):
-                rows.append({
-                    "Trade": i,
-                    "Buy date":  pd.to_datetime(t["buy_date"]).date(),
-                    "Buy price": f"${t['buy_price']:.2f}",
-                    "Sell date": pd.to_datetime(t["sell_date"]).date(),
-                    "Sell price": f"${t['sell_price']:.2f}",
-                    "Profit":    f"${t['profit']:.2f}",
-                })
-            st.subheader("Best times to buy & sell")
-            st.table(pd.DataFrame(rows))
-        else:
-            st.info("No profitable trades in this period.")
+trades = extract_trades(df["Date"], close)
+total = sum(t["profit"] for t in trades)
 
-        # preview + save
-        with st.expander("Preview downloaded data", expanded=False):
-            st.dataframe(df.tail(15), use_container_width=True)
+# Sanity: should equal standard LeetCode sum of positives
+leetcode_total = max_profit(close.tolist())
 
-        storage_dir = Path("storage/max_profit")
-        storage_dir.mkdir(parents=True, exist_ok=True)
-        csv_path = storage_dir / f"{ticker}_{start}_to_{end}_{interval}.csv"
-        df.to_csv(csv_path, index=False)
+st.markdown("Using **LeetCode 122** greedy method: sum of all positive close→close gains.")
+st.success(f"Maximum Profit over selected range: **{total:.2f}**  "
+           f"(greedy check: {leetcode_total:.2f})")
 
-        summary = pd.DataFrame([{
-            "ticker": ticker, "start": str(start), "end": str(end),
-            "interval": interval, "max_profit_2tx": total_profit
-        }])
-        summary_path = storage_dir / f"{ticker}_{start}_to_{end}_{interval}_summary.csv"
-        summary.to_csv(summary_path, index=False)
-        st.caption(f"Saved: `{csv_path.name}`, `{summary_path.name}` in storage/max_profit/")
+# --- Show trades table (if any) ---
+if trades:
+    tbl = pd.DataFrame(trades)
+    st.subheader("Buy/Sell Plan (Greedy)")
+    st.dataframe(tbl, use_container_width=True)
+else:
+    st.info("No profitable trades found for this range/interval.")
 
-    except Exception as e:
-        st.error("Computation error")
-        st.exception(e)
+# --- Quick chart with markers ---
+fig, ax = plt.subplots(figsize=(10, 4.5))
+ax.plot(df["Date"], close.values, label="Close")
+for t in trades:
+    # buy marker
+    ax.scatter(pd.to_datetime(t["buy_date"]), t["buy_price"], marker="^", s=70, label="_buy")
+    # sell marker
+    ax.scatter(pd.to_datetime(t["sell_date"]), t["sell_price"], marker="v", s=70, label="_sell")
+ax.set_title(f"{cfg['ticker']} — Close with Greedy Buy/Sell Markers ({interval})")
+ax.set_xlabel("Date")
+ax.set_ylabel("Price")
+ax.legend(["Close"], loc="best")
+st.pyplot(fig)
