@@ -32,3 +32,6 @@ if len(matching_index) > 0:
         st.write("Unable to calculate daily return")
 else: 
     st.write("Unable to calculate daily return")
+
+df.columns = ['_'.join([str(level) for level in col if level]).strip() for col in df.columns]
+st.line_chart(df, x="Date", y="Close_AAPL", width=0, height=0, use_container_width=True)
