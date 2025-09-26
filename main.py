@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date, timedelta
-from src.data.yfinance_client import fetch_prices
+from scr.data.yfinance_client import fetch_prices
 
 # Preset tickers
 TICKERS = [
@@ -78,3 +78,4 @@ df = st.session_state["data"]
 if df is not None:
     st.subheader(f"Data Preview: {st.session_state['cfg']['ticker']}")
     st.dataframe(df.head(10), use_container_width=True)
+

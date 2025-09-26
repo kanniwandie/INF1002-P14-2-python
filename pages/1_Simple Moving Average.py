@@ -1,3 +1,7 @@
+"""
+Pls move this set of code to scr/Calculations/sma.py
+as this is not for the page file.
+"""
 # import pandas as pd
 
 # def compute_sma(series: pd.Series, window: int = 5):
