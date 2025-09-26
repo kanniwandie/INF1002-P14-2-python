@@ -66,16 +66,15 @@ if st.button("Load Data", type="primary"):
         st.session_state["meta"] = {"last_fetch_ok": True, "error": None}
         st.success(f"Loaded {ticker}: {start_date} → {end_date}")
 
-
-# Preview
-df = st.session_state["data"]
-if df is not None:
-    st.subheader(f"Data Preview: {st.session_state['cfg']['ticker']}")
-    st.dataframe(df.head(10), use_container_width=True)
-
 # Sidebar status (always visible)
 with st.sidebar.expander("App status", expanded=True):
     cfg = st.session_state["cfg"]
     st.write(f"**Ticker:** {cfg['ticker']}")
     st.write(f"**Range:** {cfg['start']} → {cfg['end']}")
     st.write("Use the sidebar pages to explore SMA, Runs, Daily Returns, and Max Profit.")
+
+# Preview
+df = st.session_state["data"]
+if df is not None:
+    st.subheader(f"Data Preview: {st.session_state['cfg']['ticker']}")
+    st.dataframe(df.head(10), use_container_width=True)
