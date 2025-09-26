@@ -77,4 +77,3 @@ with st.sidebar.expander("App status", expanded=True):
 df = st.session_state["data"]
 if df is not None:
     st.subheader(f"Data Preview: {st.session_state['cfg']['ticker']}")
-    st.dataframe(df.head(10), use_container_width=True)
