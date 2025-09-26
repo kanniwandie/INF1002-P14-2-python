@@ -32,3 +32,10 @@ if len(matching_index) > 0:
         st.write("Unable to calculate daily return")
 else: 
     st.write("Unable to calculate daily return")
+
+# Sidebar status (always visible)
+with st.sidebar.expander("App status", expanded=True):
+    cfg = st.session_state["cfg"]
+    st.write(f"**Ticker:** {cfg['ticker']}")
+    st.write(f"**Range:** {cfg['start']} → {cfg['end']}")
+    st.write("Use the sidebar pages to explore SMA, Runs, Daily Returns, and Max Profit.")

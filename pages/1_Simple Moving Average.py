@@ -16,3 +16,10 @@ def compute_sma(series: pd.Series, window: int = 5) -> pd.Series:
             window_vals = series[i + 1 - window : i + 1]  # last window values
             sma_values.append(window_vals.sum() / window)
     return pd.Series(sma_values, index=series.index)
+
+# Sidebar status (always visible)
+with st.sidebar.expander("App status", expanded=True):
+    cfg = st.session_state["cfg"]
+    st.write(f"**Ticker:** {cfg['ticker']}")
+    st.write(f"**Range:** {cfg['start']} → {cfg['end']}")
+    st.write("Use the sidebar pages to explore SMA, Runs, Daily Returns, and Max Profit.")

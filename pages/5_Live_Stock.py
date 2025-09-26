@@ -179,3 +179,4 @@ with right:
 
 # footer
 st.caption(f"Range: **{sel_range}** • Data source: yfinance • Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
