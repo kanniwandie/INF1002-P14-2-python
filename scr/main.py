@@ -12,7 +12,7 @@ def main():
     start = input("Start date [default 2023-01-01]: ").strip() or "2023-01-01"
     end = input("End date (Enter=today): ").strip() or None
 
-    # ---- 2) fetch dataset ----
+    # 2) fetch dataset 
     print(f"\nDownloading {ticker} …")
     df = fetch_dataset(ticker, start, end)
     print("Dataset:", dataset_summary(df))

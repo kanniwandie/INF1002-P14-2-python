@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 def plot_runs(df: pd.DataFrame, highlight: dict | None = None):
-    """
-    Plot Close segmented into up (green) and down (orange) runs.
-    If `highlight` is given (dict with 'start_idx','end_idx'), that segment
-    is drawn thicker on top.
-    """
+    
+    #Plot Close segmented into up (green) and down (orange) runs.
+    #If `highlight` is given (dict with 'start_idx','end_idx'), that segment
+    #is drawn thicker on top.
+    
     dates = pd.to_datetime(df["Date"])
     prices = df["Close"].values
 
