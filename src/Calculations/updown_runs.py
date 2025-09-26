@@ -1,156 +1,139 @@
-# src/Calculations/updown_runs.py
+# scr/Calculations/updown_runs.py
 from __future__ import annotations
 from typing import Dict, Any, List
 import pandas as pd
 
-
-def _as_series_close(close) -> pd.Series:
-    """Coerce Close to a 1-D numeric Series."""
-    if isinstance(close, pd.DataFrame):
-        close = close.squeeze(axis=1)
-    return pd.to_numeric(close, errors="coerce")
-
-
 def compute_updown_runs(df: pd.DataFrame) -> Dict[str, Any]:
     """
-    Analyze consecutive price *changes* (close-to-close) and return:
-      - up_runs_count / down_runs_count
-      - up_days_total / down_days_total
-      - longest_up  = {'len', 'start', 'end', 'start_idx', 'end_idx'}
-      - longest_down = {...}
-      - runs: DataFrame with rows = each streak (type,len,start,end,start_idx,end_idx)
+    Compute consecutive up/down streaks from Close-to-Close changes.
+    Flat days break any current streak.
 
-    Flat days (P_t == P_{t-1}) break streaks.
+    Returns a dict with:
+      - up_runs_count, down_runs_count
+      - up_days_total, down_days_total
+      - longest_up  = {"len": int, "start": Timestamp|None, "end": Timestamp|None}
+      - longest_down = same as above
+      - runs (DataFrame with columns: dir, len, start, end)
     """
-    d = df.copy()
-    d["Date"] = pd.to_datetime(d["Date"])
-    close = _as_series_close(d["Close"])
+    # Ensure the dataframe has the required columns
+    if not all(c in df.columns for c in ["Date", "Close"]):
+        raise ValueError("DataFrame must contain 'Date' and 'Close'.")
 
-    n = len(close)
-    if n < 2:
+    # --- Data cleaning and sorting ---
+    # Make a copy to avoid mutating the original
+    data = df.copy()
+
+    # Convert 'Date' to datetime, invalid entries become NaT
+    data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
+
+    # Convert 'Close' to numeric, invalid entries become NaN
+    data["Close"] = pd.to_numeric(data["Close"], errors="coerce")
+
+    # Drop rows where Date or Close is missing, sort chronologically
+    data = data.dropna(subset=["Date", "Close"]).sort_values("Date").reset_index(drop=True)
+    # ---------------------------------
+
+    # If there are fewer than 2 rows, no streaks can be computed
+    if len(data) < 2:
         return {
-            "up_runs_count": 0, "down_runs_count": 0,
-            "up_days_total": 0, "down_days_total": 0,
-            "longest_up": {"len": 0, "start": None, "end": None, "start_idx": None, "end_idx": None},
-            "longest_down": {"len": 0, "start": None, "end": None, "start_idx": None, "end_idx": None},
-            "runs": pd.DataFrame(columns=["type","len","start","end","start_idx","end_idx"])
+            "up_runs_count": 0,
+            "down_runs_count": 0,
+            "up_days_total": 0,
+            "down_days_total": 0,
+            "longest_up":   {"len": 0, "start": None, "end": None},
+            "longest_down": {"len": 0, "start": None, "end": None},
+            "runs": pd.DataFrame(columns=["dir", "len", "start", "end"]),
         }
 
-    runs: List[dict] = []
-    cur_type = None          # 'up' or 'down'
-    start_i = None           # start index (in df)
-    up_runs_count = down_runs_count = 0
+    # Extract lists for easier iteration
+    closes = data["Close"].tolist()
+    dates  = data["Date"].tolist()
+
+    # Initialize counters
+    up_runs = down_runs = 0
     up_days_total = down_days_total = 0
 
-    # iterate deltas
-    for i in range(1, n):
-        delta = close.iloc[i] - close.iloc[i-1]
-        if pd.isna(delta) or delta == 0:
-            # close current streak if any
-            if cur_type is not None and start_i is not None:
-                end_i = i - 1
-                length = end_i - start_i + 1
-                runs.append({
-                    "type": cur_type,
-                    "len": length,
-                    "start": d["Date"].iloc[start_i],
-                    "end": d["Date"].iloc[end_i],
-                    "start_idx": start_i,
-                    "end_idx": end_i,
-                })
-                if cur_type == "up":
-                    up_runs_count += 1
-                    up_days_total += length
-                else:
-                    down_runs_count += 1
-                    down_days_total += length
-            cur_type, start_i = None, None
+    # Track current streak
+    cur_dir = None       # "up" | "down" | None
+    cur_len = 0
+    cur_start_idx = None
+
+    # Track longest streaks
+    best_up = {"len": 0, "start": None, "end": None}
+    best_down = {"len": 0, "start": None, "end": None}
+
+    # Store all streaks
+    runs_list: List[dict] = []
+
+    # Helper function: close the current streak and update stats
+    def close_streak(end_idx: int):
+        nonlocal cur_dir, cur_len, cur_start_idx
+        nonlocal up_runs, down_runs, up_days_total, down_days_total, best_up, best_down, runs_list
+
+        # If there is no active streak, do nothing
+        if cur_dir is None or cur_len == 0:
+            return
+
+        # Record streak details
+        start_dt = dates[cur_start_idx]
+        end_dt   = dates[end_idx]
+        runs_list.append({"dir": cur_dir, "len": cur_len, "start": start_dt, "end": end_dt})
+
+        # Update stats depending on streak type
+        if cur_dir == "up":
+            up_runs += 1
+            up_days_total += cur_len
+            if cur_len > best_up["len"]:
+                best_up = {"len": cur_len, "start": start_dt, "end": end_dt}
+        else:
+            down_runs += 1
+            down_days_total += cur_len
+            if cur_len > best_down["len"]:
+                best_down = {"len": cur_len, "start": start_dt, "end": end_dt}
+
+        # Reset current streak
+        cur_dir = None
+        cur_len = 0
+        cur_start_idx = None
+
+    # Iterate over all days, comparing consecutive Close prices
+    for i in range(1, len(closes)):
+        delta = closes[i] - closes[i - 1]
+        step = "up" if delta > 0 else "down" if delta < 0 else None
+
+        if step is None:
+            # flat day breaks any streak
+            close_streak(i - 1)
             continue
 
-        step_type = "up" if delta > 0 else "down"
-        if cur_type is None:
-            cur_type = step_type
-            start_i = i - 1
-        elif step_type != cur_type:
-            # close previous and start new
-            end_i = i - 1
-            length = end_i - start_i + 1
-            runs.append({
-                "type": cur_type,
-                "len": length,
-                "start": d["Date"].iloc[start_i],
-                "end": d["Date"].iloc[end_i],
-                "start_idx": start_i,
-                "end_idx": end_i,
-            })
-            if cur_type == "up":
-                up_runs_count += 1
-                up_days_total += length
-            else:
-                down_runs_count += 1
-                down_days_total += length
-            cur_type = step_type
-            start_i = i - 1
+        if cur_dir is None:
+            # Start a new streak
+            cur_dir = step
+            cur_len = 1
+            cur_start_idx = i - 1
+        elif cur_dir == step:
+            # Continue current streak
+            cur_len += 1
         else:
-            # continue same streak
-            pass
+            # direction flipped: close old streak and start new one
+            close_streak(i - 1)
+            cur_dir = step
+            cur_len = 1
+            cur_start_idx = i - 1
 
-    # close tail
-    if cur_type is not None and start_i is not None:
-        end_i = n - 1
-        length = end_i - start_i + 1
-        runs.append({
-            "type": cur_type,
-            "len": length,
-            "start": d["Date"].iloc[start_i],
-            "end": d["Date"].iloc[end_i],
-            "start_idx": start_i,
-            "end_idx": end_i,
-        })
-        if cur_type == "up":
-            up_runs_count += 1
-            up_days_total += length
-        else:
-            down_runs_count += 1
-            down_days_total += length
+    # Close the last open streak if any
+    close_streak(len(closes) - 1)
 
-    runs_df = pd.DataFrame(runs)
-    longest_up = {"len": 0, "start": None, "end": None, "start_idx": None, "end_idx": None}
-    longest_down = {"len": 0, "start": None, "end": None, "start_idx": None, "end_idx": None}
-    if not runs_df.empty:
-        up_rows = runs_df[runs_df["type"] == "up"]
-        down_rows = runs_df[runs_df["type"] == "down"]
-        if not up_rows.empty:
-            idx = up_rows["len"].idxmax()
-            row = runs_df.loc[idx]
-            longest_up = {"len": int(row["len"]), "start": row["start"], "end": row["end"],
-                          "start_idx": int(row["start_idx"]), "end_idx": int(row["end_idx"])}
-        if not down_rows.empty:
-            idx = down_rows["len"].idxmax()
-            row = runs_df.loc[idx]
-            longest_down = {"len": int(row["len"]), "start": row["start"], "end": row["end"],
-                            "start_idx": int(row["start_idx"]), "end_idx": int(row["end_idx"])}
+    # Convert streak list into DataFrame
+    runs_df = pd.DataFrame(runs_list, columns=["dir", "len", "start", "end"])
 
+    # Final results
     return {
-        "up_runs_count": int(up_runs_count),
-        "down_runs_count": int(down_runs_count),
-        "up_days_total": int(up_days_total),
-        "down_days_total": int(down_days_total),
-        "longest_up": longest_up,
-        "longest_down": longest_down,
-        "runs": runs_df
-    }
-
-
-# Backward-compat wrapper so older page code still works
-def count_runs(series_like) -> dict:
-    """Return minimal stats (legacy)."""
-    s = _as_series_close(series_like)
-    df = pd.DataFrame({"Date": pd.RangeIndex(len(s)), "Close": s})
-    res = compute_updown_runs(df)
-    return {
-        "up_count": res["up_runs_count"],
-        "down_count": res["down_runs_count"],
-        "longest_up": res["longest_up"]["len"],
-        "longest_down": res["longest_down"]["len"],
+        "up_runs_count": up_runs,
+        "down_runs_count": down_runs,
+        "up_days_total": up_days_total,
+        "down_days_total": down_days_total,
+        "longest_up": best_up,
+        "longest_down": best_down,
+        "runs": runs_df,
     }
