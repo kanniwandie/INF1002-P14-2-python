@@ -171,6 +171,8 @@ if df is None or df.empty:
 # MAIN AREA
 # =======================
 st.title("💰 Max Profit — Unlimited Transactions (Greedy)")
+st.caption("Implements Best Time to Buy and Sell Stock II (LeetCode 122) — greedy valley→peak.")
+
 
 # Source/ticker badge
 if meta and meta.get("ticker"):
@@ -200,7 +202,8 @@ trades = extract_trades(df["Date"], df["Close"])
 
 # Result
 st.subheader("Result")
-st.success(f"Maximum Profit: **{total_profit:.2f}**")
+st.success(f"Maximum Profit: **{total_profit:.2f}**  • Trades: **{len(trades)}**")
+
 
 # Trades table (optional)
 if show_trades_table:
@@ -236,3 +239,30 @@ if show_markers and trades:
     st.altair_chart(base + markers, use_container_width=True)
 else:
     st.altair_chart(base, use_container_width=True)
+
+# =======================
+# VALIDATION RESULTS
+# =======================
+with st.expander("Validation (auto tests)", expanded=False):
+    tests = [
+        ([7,1,5,3,6,4], 7.0),
+        ([1,2,3,4,5],   4.0),
+        ([5,4,3,2,1],   0.0),
+        ([2,1,2,0,1],   2.0),
+        ([3,3,5,0,0,3,1,4], 8.0),
+    ]
+    ok = True
+    for arr, expect in tests:
+        s = pd.Series(arr, index=pd.date_range("2020-01-01", periods=len(arr)))
+        got = float(max_profit_unlimited(s))
+        st.write(
+            f"prices={arr} → profit={got:.2f} (expect {expect:.2f}) "
+            + ("✅" if abs(got-expect) < 1e-9 else "❌")
+        )
+        ok &= abs(got-expect) < 1e-9
+
+    if ok:
+        st.success("All validation cases passed.")
+    else:
+        st.error("Some validation cases failed.")
+
