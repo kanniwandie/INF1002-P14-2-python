@@ -1,10 +1,6 @@
-# data_preprocessing.py
-"""
-Lightweight preprocessing layer.
-Goal: normalize any price dataset (yfinance, CSV, API) into a standard OHLCV
-DataFrame with a DatetimeIndex so downstream algorithms don't break.
-"""
-
+# data_preprocseeing.py
+from __future__ import annotations
+import io
 import pandas as pd
 
 CANONICAL_COLS = ["Open", "High", "Low", "Close", "Volume"]
@@ -18,34 +14,33 @@ def _is_datelike(series: pd.Series) -> bool:
 
 def standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Standardize raw input into a clean OHLCV DataFrame.
-    - Flattens MultiIndex columns if present
-    - Renames common column variations
+    Normalize ANY price dataset to OHLCV with a DatetimeIndex.
+    - Flattens MultiIndex columns
+    - Title-cases headers
+    - Maps 'Adj Close'/'Price' -> 'Close' (if needed)
     - Ensures ['Open','High','Low','Close','Volume'] exist
-    - Guarantees a DatetimeIndex (detects column or infers first date-like col)
-    - Sorts index, drops duplicates
-    - Fills missing values with forward-fill/backfill
+    - Builds a DatetimeIndex from index/'Date'/first datelike col
+    - Sorts, drops duplicate dates, minimal ffill/bfill, coerces numerics
     """
     if not isinstance(df, pd.DataFrame):
         raise TypeError("standardize_ohlcv expects a pandas DataFrame")
 
     df = df.copy()
 
-    # --- Flatten MultiIndex columns if present ---
+    # Flatten MultiIndex columns if present
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
-    # 1) Normalize header casing/spacing
-    rename_map = {c: str(c).strip().title() for c in df.columns}
-    df.rename(columns=rename_map, inplace=True)
+    # Normalize header casing/spacing
+    df.rename(columns={c: str(c).strip().title() for c in df.columns}, inplace=True)
 
-    # 2) Handle common variations
+    # Map common variations to Close
     if "Adj Close" in df.columns and "Close" not in df.columns:
         df.rename(columns={"Adj Close": "Close"}, inplace=True)
     if "Price" in df.columns and "Close" not in df.columns:
         df.rename(columns={"Price": "Close"}, inplace=True)
 
-    # 3) Ensure a DatetimeIndex (robust to different shapes)
+    # Ensure a DatetimeIndex
     if isinstance(df.index, pd.DatetimeIndex):
         df.index = pd.to_datetime(df.index, errors="coerce")
         df.index.name = df.index.name or "Date"
@@ -53,7 +48,6 @@ def standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
         df = df.dropna(subset=["Date"]).set_index("Date")
     else:
-        # try to infer a date column (common CSVs: first col is dates)
         if len(df.columns) > 0 and _is_datelike(df.iloc[:, 0]):
             col0 = df.columns[0]
             df[col0] = pd.to_datetime(df[col0], errors="coerce")
@@ -62,53 +56,63 @@ def standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
         else:
             raise ValueError("No Date column or DatetimeIndex found (and could not infer one).")
 
-    # 4) Guarantee canonical columns
+    # Guarantee canonical columns
     for col in CANONICAL_COLS:
         if col not in df.columns:
             df[col] = pd.NA
-
     df = df[CANONICAL_COLS]
 
-    # 5) Clean index & fill gaps minimally
+    # Clean index & fill small gaps
     df = df.sort_index()
     df = df[~df.index.duplicated(keep="last")]
     df = df.ffill().bfill()
 
+    # Coerce numerics
+    for col in CANONICAL_COLS:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
     return df
 
 def to_price_series(df: pd.DataFrame) -> pd.Series:
-    """
-    Extract Close price as a float series with DatetimeIndex.
-    Downstream algorithms (like max_profit) consume this.
-    """
-    s = df["Close"].astype("float64")
-    s.index = pd.to_datetime(df.index)
+    """Close as float Series with a DatetimeIndex (works with Date column or index)."""
+    if isinstance(df.index, pd.DatetimeIndex):
+        s = pd.to_numeric(df["Close"], errors="coerce").dropna()
+        s.index = pd.to_datetime(df.index)
+    else:
+        s = pd.to_numeric(df["Close"], errors="coerce").dropna()
+        if "Date" in df.columns:
+            s.index = pd.to_datetime(df.loc[s.index, "Date"], errors="coerce")
+        else:
+            s.index = pd.to_datetime(df.index, errors="coerce")
     s.index.name = "Date"
     return s
 
-import pandas as pd
-
 def quick_summary(df: pd.DataFrame) -> str:
-    """
-    Return a one-line summary: row count and date range.
-    Works whether Date is an index (DatetimeIndex) or a column.
-    """
+    """One-line summary: row count and date range."""
     if df is None or df.empty:
-        return "Empty DataFrame"
-
-    start = end = "N/A"
-
+        return "Rows: 0 | Range: N/A"
+    start = end = None
     if isinstance(df.index, pd.DatetimeIndex) and len(df.index) > 0:
+        start = df.index.min().date(); end = df.index.max().date()
+    if (start is None or end is None) and "Date" in df.columns:
+        d = pd.to_datetime(df["Date"], errors="coerce").dropna()
+        if not d.empty:
+            start = start or d.min().date(); end = end or d.max().date()
+    return f"Rows: {len(df)} | Range: {start} → {end}" if start and end else f"Rows: {len(df)} | Range: N/A"
+
+def load_file_clean(file_obj) -> pd.DataFrame:
+    """
+    Read CSV or Excel (uploaded file-like) and return standardized OHLCV with a 'Date' column.
+    """
+    try:
+        buf = io.BytesIO(file_obj.read()) if hasattr(file_obj, "read") else file_obj
+        df = pd.read_csv(buf)
+    except Exception:
         try:
-            start = df.index.min().date()
-            end = df.index.max().date()
+            if hasattr(file_obj, "seek"):
+                file_obj.seek(0)
+            df = pd.read_excel(file_obj)
         except Exception:
-            pass
-
-    if (start == "N/A" or end == "N/A") and "Date" in df.columns:
-        dates = pd.to_datetime(df["Date"], errors="coerce").dropna()
-        if not dates.empty:
-            start = dates.min().date()
-            end = dates.max().date()
-
-    return f"Rows: {len(df)} | Range: {start} → {end}"
+            raise RuntimeError("Failed to read uploaded file as CSV or Excel.")
+    df = standardize_ohlcv(df).reset_index()
+    return df[["Date", "Open", "High", "Low", "Close", "Volume"]]
