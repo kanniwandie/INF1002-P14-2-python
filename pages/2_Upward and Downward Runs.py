@@ -87,3 +87,27 @@ with st.sidebar.expander("App status", expanded=True):
     st.write("Use the sidebar pages to explore SMA, Runs, Daily Returns, and Max Profit.")
 
 
+from scr.Visulation.updown_chart import plot_updown_runs
+
+# Use the cleaned, sorted df prepared by compute_updown_runs (Option 2)
+clean_df = res["clean_df"]
+
+# Let the user choose which streak to highlight
+choice = st.radio(
+    "Highlight:", ["Longest up", "Longest down", "None"],
+    index=0, horizontal=True
+)
+highlight = None
+if choice == "Longest up":
+    highlight = res.get("longest_up")
+elif choice == "Longest down":
+    highlight = res.get("longest_down")
+
+# Optional: toggle to show markers at segment edges
+show_markers = st.checkbox("Show run boundary markers", value=False)
+
+fig = plot_updown_runs(clean_df, highlight=highlight, show_markers=show_markers)
+st.pyplot(fig)
+
+
+
