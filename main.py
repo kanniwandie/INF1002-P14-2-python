@@ -22,7 +22,7 @@ st.session_state.setdefault("cfg", {"ticker": default_ticker, "start": default_s
 st.session_state.setdefault("data", None)
 st.session_state.setdefault("meta", {"last_fetch_ok": False, "error": None})
 
-# ── Controls
+# Controls
 col_t, col_gap, col_start, col_end = st.columns([2.5, 0.3, 1.2, 1.2])
 
 with col_t:
@@ -77,3 +77,5 @@ with st.sidebar.expander("App status", expanded=True):
 df = st.session_state["data"]
 if df is not None:
     st.subheader(f"Data Preview: {st.session_state['cfg']['ticker']}")
+    st.dataframe(df.head(10), use_container_width=True)
+
