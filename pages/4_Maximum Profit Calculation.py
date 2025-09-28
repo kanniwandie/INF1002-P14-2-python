@@ -266,3 +266,10 @@ with st.expander("Validation (auto tests)", expanded=False):
     else:
         st.error("Some validation cases failed.")
 
+# Sidebar status (always visible)
+with st.sidebar.expander("App status", expanded=True):
+    cfg = st.session_state["cfg"]
+    st.write(f"**Ticker:** {cfg['ticker']}")
+    st.write(f"**Range:** {cfg['start']} → {cfg['end']}")
+    st.write("Use the sidebar pages to explore SMA, Runs, Daily Returns, and Max Profit.")
+
