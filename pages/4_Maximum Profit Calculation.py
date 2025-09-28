@@ -16,6 +16,7 @@ st.set_page_config(page_title="Max Profit — Unlimited Transactions", layout="w
 st.session_state.setdefault("maxprofit_df", None)
 st.session_state.setdefault("maxprofit_source", None)
 st.session_state.setdefault("maxprofit_meta", {"source": None, "ticker": None, "origin": None, "label": None})
+st.session_state.setdefault("maxprofit_fp", None)  # fingerprint of session data
 
 # -----------------------
 # Helpers
@@ -51,6 +52,26 @@ def set_df(df: pd.DataFrame, ok_msg: str):
         st.session_state["maxprofit_df"] = df
         st.success(ok_msg)
 
+def session_fingerprint() -> tuple | None:
+    """
+    Lightweight fingerprint to detect if session data changed
+    without heavy hashing. Returns None if no usable session data.
+    """
+    df = st.session_state.get("data")
+    cfg = st.session_state.get("cfg", {})
+    if isinstance(df, pd.DataFrame) and not df.empty:
+        try:
+            return (
+                cfg.get("ticker"),
+                pd.to_datetime(df["Date"]).min(),
+                pd.to_datetime(df["Date"]).max(),
+                len(df),
+            )
+        except Exception:
+            # If columns differ, still give a simple shape-based fp
+            return (cfg.get("ticker"), len(df))
+    return None
+
 # =======================
 # SIDEBAR
 # =======================
@@ -68,21 +89,28 @@ with st.sidebar:
         st.session_state["maxprofit_df"] = None
         st.session_state["maxprofit_source"] = source
         st.session_state["maxprofit_meta"] = {"source": None, "ticker": None, "origin": None, "label": None}
+        st.session_state["maxprofit_fp"] = None  # reset fingerprint too
 
     with st.expander("Advanced settings", expanded=False):
         auto_adj = st.checkbox("Auto-adjust prices (splits/dividends)", value=True)
         show_trades_table = st.checkbox("Show trades table", value=True)
         show_markers = st.checkbox("Show buy/sell markers on chart", value=True)
 
-    df = None
-
+    # ---- Source handling ----
     if source == "Session data":
         st.caption("Uses data already loaded on Home page.")
-        if st.button("Use session data", use_container_width=True, key="btn_use_sess"):
-            if "data" in st.session_state and isinstance(st.session_state["data"], pd.DataFrame) and not st.session_state["data"].empty:
-                df = canonicalize(st.session_state["data"])
-                set_df(df, "Loaded session snapshot.")
-                if df is not None and not df.empty:
+        fp = session_fingerprint()
+
+        if fp is None:
+            st.warning("No session data found. Go to Home to load data first.")
+        else:
+            # Only (re)load if data changed or not yet loaded
+            if (st.session_state["maxprofit_df"] is None) or (st.session_state["maxprofit_fp"] != fp):
+                try:
+                    df_sess = st.session_state["data"]
+                    df = canonicalize(df_sess)
+                    set_df(df, "Loaded session snapshot.")
+                    st.session_state["maxprofit_fp"] = fp
                     tick = st.session_state.get("cfg", {}).get("ticker", "Unknown")
                     st.session_state["maxprofit_meta"] = {
                         "source": "Session data",
@@ -90,8 +118,8 @@ with st.sidebar:
                         "origin": "session",
                         "label": None,
                     }
-            else:
-                st.warning("No session data found. Go to Home to load data first.")
+                except Exception as e:
+                    st.error(f"Failed to read session data: {e}")
 
     elif source == "Yahoo Finance":
         # Popular OR custom ticker
@@ -173,7 +201,6 @@ if df is None or df.empty:
 st.title("💰 Max Profit — Unlimited Transactions (Greedy)")
 st.caption("Implements Best Time to Buy and Sell Stock II (LeetCode 122) — greedy valley→peak.")
 
-
 # Source/ticker badge
 if meta and meta.get("ticker"):
     if meta.get("origin") == "popular":
@@ -203,7 +230,6 @@ trades = extract_trades(df["Date"], df["Close"])
 # Result
 st.subheader("Result")
 st.success(f"Maximum Profit: **{total_profit:.2f}**  • Trades: **{len(trades)}**")
-
 
 # Trades table (optional)
 if show_trades_table:
@@ -265,11 +291,3 @@ with st.expander("Validation (auto tests)", expanded=False):
         st.success("All validation cases passed.")
     else:
         st.error("Some validation cases failed.")
-
-# Sidebar status (always visible)
-with st.sidebar.expander("App status", expanded=True):
-    cfg = st.session_state["cfg"]
-    st.write(f"**Ticker:** {cfg['ticker']}")
-    st.write(f"**Range:** {cfg['start']} → {cfg['end']}")
-    st.write("Use the sidebar pages to explore SMA, Runs, Daily Returns, and Max Profit.")
-
