@@ -87,7 +87,7 @@ with st.sidebar.expander("App status", expanded=True):
     st.write("Use the sidebar pages to explore SMA, Runs, Daily Returns, and Max Profit.")
 
 
-from scr.Visulation.updown_chart import plot_updown_runs
+from scr.Visualization.updown_chart import plot_updown_runs
 
 # Use the cleaned, sorted df prepared by compute_updown_runs (Option 2)
 clean_df = res["clean_df"]

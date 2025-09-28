@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 from scr.Calculations.sma import compute_sma
-from scr.Visulation.sma_chart import plot_close_vs_sma  
+from scr.Visualization.sma_chart import plot_close_vs_sma  
 
 st.set_page_config(page_title="SMA — Simple Moving Average", layout="wide")
 st.title("📐 Simple Moving Average (SMA)")
@@ -40,11 +40,11 @@ st.pyplot(plot_close_vs_sma(df, sma_series))
 
 #---Validation---
 def _validate_sma_cases(df: pd.DataFrame, user_window: int) -> pd.DataFrame:
-    """Build validation cases and compare compute_sma vs pandas rolling().mean()."""
+    #Build validation cases and compare compute_sma vs pandas rolling().mean().
     tests = [
         {"case": "Ascending 1..10, w=3", "series": pd.Series(range(1, 11)), "w": 3},
         {"case": "Shorter than window, w=5", "series": pd.Series([10, 20, 30, 40]), "w": 5},
-        {"case": "With NaNs, w=3", "series": pd.Series([10, np.nan, 30, 40, 50]), "w": 3},
+        {"case": "With NaNs, w=0", "series": pd.Series([10, np.nan, 30, 40, 50]), "w": 0},
         {"case": "Window=1 (identity)", "series": pd.Series([5, 7, 9, 11]), "w": 1},
         {"case": "Constant series, w=4", "series": pd.Series([7] * 8), "w": 4},
         {"case": "Window equals length, w=4", "series": pd.Series([2, 4, 6, 8]), "w": 4},
