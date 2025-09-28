@@ -3,19 +3,19 @@ import streamlit as st
 import pandas as pd
 from scr.Calculations.daily_returns import dr_calc
 
-st.set_page_config(
-    page_title="💹 Daily Returns"
-)
+st.set_page_config(page_title="💹 Daily Returns")
+st.title("💹 Daily Returns")
+
 # Ensuring relevant data is retrieved 
 if "data" not in st.session_state or st.session_state["data"] is None:
     st.warning("Please load data from the Home page first.")
     st.stop()
 
 # Selection of date for daily returns
-st.caption("Formula: rₜ = (Pₜ − Pₜ₋₁) / Pₜ₋₁ using daily **Close** prices.")
+st.caption("Daily returns calculated using formula: rₜ = (Pₜ - Pₜ₋₁) / Pₜ₋₁ with daily **Close** prices.")
 default_date = st.session_state["cfg"]["start"]
 selected_date_custom = st.date_input(
-    "Choose your date from loaded range",
+    "Choose your date from loaded data range",
     value=default_date,
     min_value=st.session_state["cfg"]["start"],
     max_value=st.session_state["cfg"]["end"],
@@ -27,16 +27,23 @@ df = st.session_state["data"].copy()
 matching_index = df.index[df["Date"] == dropdown_date]
 dropdown_date_str = dropdown_date.strftime("%Y-%m-%d")
 
+st.subheader("Selected Date Details:")
+sc,pc,dr = st.columns(3)
+
 # Searching for date selected through dataset
 if len(matching_index) > 0:
     index = matching_index[0]
     if index != 0:
         daily_return = dr_calc(df, index)
-        st.write(f"Daily return for {dropdown_date_str}: {daily_return:.3f}%")
+        sc.metric("Selected Close (Pₜ)",
+                  f"${df.loc[index, 'Close']:.2f}", delta=None)
+        pc.metric("Previous Close (Pₜ₋₁)",
+                  f"${df.loc[index-1, 'Close']:.2f}", delta=None)
+        dr.metric("Daily Return (rₜ)", f"{daily_return:.3f}%", delta=None)
     else:
-        st.write("Unable to calculate daily return for starting date")
+        st.warning("No previous day to compare for daily return, please select range that starts earlier.")
 else: 
-    st.write("Date out of range, unable to calculate daily return")
+    st.warning("No trading data for selected date, it could be a weekend or holiday. Please select another date.")
 
 # Line chart for daily returns across the range of dates selected
 st.subheader("Daily Returns for Range of Dates selected:")
