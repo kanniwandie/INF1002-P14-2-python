@@ -1,3 +1,4 @@
+# pages/Daily Returns Page
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -33,5 +34,14 @@ if len(matching_index) > 0:
 else: 
     st.write("Unable to calculate daily return")
 
+<<<<<<< HEAD
 df.columns = ['_'.join([str(level) for level in col if level]).strip() for col in df.columns]
 st.line_chart(df, x="Date", y="Close_AAPL", width=0, height=0, use_container_width=True)
+=======
+# Sidebar status (always visible)
+with st.sidebar.expander("App status", expanded=True):
+    cfg = st.session_state["cfg"]
+    st.write(f"**Ticker:** {cfg['ticker']}")
+    st.write(f"**Range:** {cfg['start']} → {cfg['end']}")
+    st.write("Use the sidebar pages to explore SMA, Runs, Daily Returns, and Max Profit.")
+>>>>>>> main
