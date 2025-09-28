@@ -19,7 +19,7 @@ bash: pip install streamlit yfinance matplotlib streamlit-autorefresh numpy pand
 What these do:
 - streamlit → for the web app
 - yfinance → to fetch stock data
-- matplotlib → (I think you meant math.plot, but the real library is matplotlib)
+- matplotlib → creating static, animated, and interactive visualizations
 - streamlit-autorefresh → to enable auto-refresh
 - numpy → math operations
 - pandas → data handling
