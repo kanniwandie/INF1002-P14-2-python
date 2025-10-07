@@ -8,7 +8,6 @@ supports multiple Yahoo-style time ranges for historical data, auto-refreshes
 every 5 seconds for live-ish updates, plots a clean price chart with Plotly,
 and shows a right-hand snapshot with common quote fields.
 
-
 """
 
 import streamlit as st

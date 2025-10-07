@@ -10,8 +10,6 @@ Finance fetch, or user-uploaded CSV/Excel), canonicalizes the dataset to
 Date/Open/High/Low/Close/Volume, reconstructs greedy trades for explanation/
 plotting, and provides quick summary plus validation test cases.
 
-Author: Alixis Low
-Date: 7 Oct 2025
 """
 
 

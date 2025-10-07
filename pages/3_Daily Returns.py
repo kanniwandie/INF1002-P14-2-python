@@ -9,8 +9,6 @@ where P_t is the Close price on the selected trading day. It also shows a line
 chart of Close prices across the selected date range and preserves app status
 in the sidebar.
 
-Author: Alixis Low
-Date: 7 Oct 2025
 """
 
 # pages/Daily Returns Page
