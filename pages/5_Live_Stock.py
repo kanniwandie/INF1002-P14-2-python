@@ -1,3 +1,16 @@
+# pages/4_Maximum Profit Calculation.py
+
+"""
+Streamlit Page: Live Stock Dashboard
+
+This page provides a real-time market snapshot powered by Yahoo Finance. It
+supports multiple Yahoo-style time ranges for historical data, auto-refreshes
+every 5 seconds for live-ish updates, plots a clean price chart with Plotly,
+and shows a right-hand snapshot with common quote fields.
+
+
+"""
+
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -26,9 +39,15 @@ st.caption("⏳ Auto-refresh: every **5s**")
 # Data fetch helpers
 def range_to_history_args(rng: str):
     """
-    Map UI range to yfinance .history(...) arguments.
-    Prefer intervals that keep the number of points reasonable and intraday
-    granularity where appropriate.
+    Translate a human-readable range into yfinance.history() keyword arguments.
+
+    Args:
+        rng (str): Range label from the UI (e.g., "1D", "1M", "YTD", "All").
+
+    Returns:
+        dict: Keyword arguments suitable for yf.Ticker(...).history(**kwargs),
+              selecting a period/start and an interval that keep a reasonable
+              number of points and intraday granularity when appropriate.
     """
     if rng == "1D":
         return dict(period="1d", interval="1m")    # intraday 1-minute
@@ -50,6 +69,23 @@ def range_to_history_args(rng: str):
 
 @st.cache_data(ttl=4)  # re-use for 4s between the 5s refreshes
 def fetch_snapshot_and_history(ticker: str, rng: str):
+    """
+    Fetch a lightweight quote snapshot and the historical time series for a ticker.
+
+    This function first attempts to use fast_info for quick fields, falling back
+    to .info where needed. Then it pulls history based on the selected range and
+    normalizes the result to include a Date column and numeric Close.
+
+    Args:
+        ticker (str): Symbol to fetch, e.g., "AAPL".
+        rng (str): UI range label to control period/interval (see range_to_history_args).
+
+    Returns:
+        tuple[dict, pd.DataFrame]:
+            - info (dict): Best-effort merged snapshot fields (may vary by ticker).
+            - df (pd.DataFrame): Historical data with at least ["Date","Close"].
+                                 Empty if no data is returned.
+    """
     stock = yf.Ticker(ticker)
     info = stock.fast_info if hasattr(stock, "fast_info") else {}
     # fall back to .info for fields fast_info may not provide
@@ -165,6 +201,17 @@ with right:
     div_yield  = info.get("dividendYield")  
 
     def fmt(x, digits=2):
+        """
+        Format a value for compact display in the snapshot panel.
+
+        Args:
+            x: Value to format (numeric or other).
+            digits (int): Number of decimal places for numeric types.
+
+        Returns:
+            str: "—" for None/NaN; otherwise a string with the requested precision
+                 (or passthrough for non-numeric values).
+        """
         return "—" if x is None or (isinstance(x, float) and pd.isna(x)) else (f"{x:.{digits}f}" if isinstance(x, (int,float)) else x)
 
     st.write("**At close:**", fmt(prev_close))
@@ -179,4 +226,3 @@ with right:
 
 # footer
 st.caption(f"Range: **{sel_range}** • Data source: yfinance • Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-

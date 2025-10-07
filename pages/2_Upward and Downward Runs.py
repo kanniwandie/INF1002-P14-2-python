@@ -1,4 +1,12 @@
 # pages/2_Upward and Downward Runs.py
+"""
+Streamlit Page: Upward & Downward Runs
+
+This page analyzes sequences of consecutive up-days and down-days (“runs”) in the
+loaded price dataset. It computes counts, totals, longest streaks, shows a table
+of all runs, and visualizes them with optional highlighting.
+
+"""
 
 # --- Allow importing from project root when running from /pages ---
 import os, sys
@@ -12,6 +20,9 @@ import pandas as pd
 
 from scr.Calculations.updown_runs import compute_updown_runs
 
+# -----------------------------
+# Page setup
+# -----------------------------
 st.set_page_config(page_title="Upward & Downward Runs", layout="wide")
 st.title("📈 Upward & Downward Runs")
 
@@ -40,6 +51,15 @@ c4.metric("Down-days total", int(res["down_days_total"]))
 
 # 4) Longest streaks
 def _fmt_dt(x):
+    """
+    Safely format a datetime-like value to ISO date (YYYY-MM-DD).
+
+    Args:
+        x: A value convertible to pandas.Timestamp (or already a date-like).
+
+    Returns:
+        str: ISO-8601 date string if conversion succeeds, otherwise "—".
+    """
     try:
         return pd.to_datetime(x).date().isoformat()
     except Exception:
@@ -86,7 +106,6 @@ with st.sidebar.expander("App status", expanded=True):
     st.write(f"**Range:** {cfg['start']} → {cfg['end']}")
     st.write("Use the sidebar pages to explore SMA, Runs, Daily Returns, and Max Profit.")
 
-
 from scr.Visualization.updown_chart import plot_updown_runs
 
 # Use the cleaned, sorted df prepared by compute_updown_runs (Option 2)
@@ -108,6 +127,3 @@ show_markers = st.checkbox("Show run boundary markers", value=False)
 
 fig = plot_updown_runs(clean_df, highlight=highlight, show_markers=show_markers)
 st.pyplot(fig)
-
-
-

@@ -1,5 +1,20 @@
 # pages/4_Maximum Profit Calculation.py
 
+"""
+Streamlit Page: Maximum Profit — Unlimited Transactions (Greedy)
+
+This page implements a classic greedy strategy (LeetCode 122) to compute the
+maximum achievable profit from unlimited buy/sell transactions on a closing-
+price series. It supports three data sources (existing session data, Yahoo
+Finance fetch, or user-uploaded CSV/Excel), canonicalizes the dataset to
+Date/Open/High/Low/Close/Volume, reconstructs greedy trades for explanation/
+plotting, and provides quick summary plus validation test cases.
+
+Author: Alixis Low
+Date: 7 Oct 2025
+"""
+
+
 import pandas as pd
 import streamlit as st
 import altair as alt
@@ -27,6 +42,20 @@ def canonicalize(df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def load_yf_clean(ticker: str, start: str, end: str, auto_adj: bool) -> pd.DataFrame:
+    """
+    Fetch prices from Yahoo Finance and return a canonical OHLCV DataFrame.
+
+    Args:
+        ticker (str): Symbol to fetch (e.g., "AAPL", "^GSPC").
+        start (str): Start date in "YYYY-MM-DD".
+        end   (str): End date in "YYYY-MM-DD".
+        auto_adj (bool): If True, apply Yahoo auto-adjust for splits/dividends.
+
+    Returns:
+        pd.DataFrame: Canonicalized DataFrame with columns
+                      ["Date","Open","High","Low","Close","Volume"].
+                      Empty DataFrame if no data is returned.
+    """
     raw = fetch_raw_yf(ticker, start, end, auto_adjust=auto_adj)
     if raw is None or raw.empty:
         return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
@@ -34,6 +63,19 @@ def load_yf_clean(ticker: str, start: str, end: str, auto_adj: bool) -> pd.DataF
 
 @st.cache_data(show_spinner=False)
 def load_csv_clean(file) -> pd.DataFrame:
+    """
+    Load a user-uploaded CSV/Excel file and return a canonical OHLCV DataFrame.
+
+    The loader tries CSV first; on failure it seeks back (if possible) and tries
+    Excel. The resulting DataFrame is standardized to Date/Open/High/Low/Close/
+    Volume with unique, sorted dates.
+
+    Args:
+        file: A file-like object provided by Streamlit's uploader.
+
+    Returns:
+        pd.DataFrame: Canonicalized DataFrame ["Date","Open","High","Low","Close","Volume"].
+    """
     try:
         df = pd.read_csv(file)
     except Exception:
@@ -46,6 +88,13 @@ def load_csv_clean(file) -> pd.DataFrame:
     return canonicalize(df)
 
 def set_df(df: pd.DataFrame, ok_msg: str):
+    """
+    Store a validated dataset into page-local session state and show a status message.
+
+    Args:
+        df (pd.DataFrame): DataFrame to store.
+        ok_msg (str): Success message to display if df is non-empty.
+    """
     if df is None or df.empty:
         st.error("No data returned.")
     else:

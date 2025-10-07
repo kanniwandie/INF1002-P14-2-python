@@ -1,10 +1,33 @@
 # scr/visulation/updown_chart.py
+"""
+Visualization: Upward & Downward Runs (Matplotlib)
+
+Plots a Close-price time series segmented into upward (green) and downward
+(orange) runs, with optional highlighting of a specific streak (e.g., the
+longest up/down run) and optional boundary markers. Intended to work with
+the `clean_df` returned by `compute_updown_runs()`.
+
+"""
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
 def _prep(df: pd.DataFrame) -> pd.DataFrame:
-    """Return a clean ['Date','Close'] frame, sorted by Date."""
+    """
+    Return a clean ['Date','Close'] frame, sorted by Date.
+
+    Steps:
+      - Coerce 'Date' to datetime and 'Close' to numeric.
+      - Drop rows with missing Date/Close.
+      - Sort by Date and reset index.
+
+    Args:
+        df (pd.DataFrame): Source with at least 'Date' and 'Close'.
+
+    Returns:
+        pd.DataFrame: Two-column DataFrame ['Date','Close'] ready for plotting.
+    """
     d = df.copy()
     d["Date"]  = pd.to_datetime(d["Date"], errors="coerce")
     d["Close"] = pd.to_numeric(d["Close"], errors="coerce")
@@ -12,7 +35,21 @@ def _prep(df: pd.DataFrame) -> pd.DataFrame:
     return d[["Date", "Close"]]
 
 def _resolve_indices(d: pd.DataFrame, highlight: dict | None):
-    """Resolve start/end indices from highlight dict (supports idx or dates)."""
+    """
+    Resolve start/end indices from highlight dict (supports idx or dates).
+
+    The highlight mapping may include either:
+      - {'start_idx': int, 'end_idx': int}, or
+      - {'start': datetime-like, 'end': datetime-like}
+
+    Args:
+        d (pd.DataFrame): Cleaned DataFrame from `_prep` with ['Date','Close'].
+        highlight (dict | None): Highlight spec (or None to disable).
+
+    Returns:
+        tuple[int | None, int | None]: (start_idx, end_idx) if resolvable,
+        otherwise (None, None).
+    """
     if not highlight:
         return None, None
     si = highlight.get("start_idx")

@@ -1,4 +1,22 @@
 # scr/Calculations/updown_runs.py
+"""
+Up/Down Runs Analysis
+
+Computes sequences (“runs”) of consecutive up-days and down-days from Close-to-Close
+changes in a price series. The function sanitizes input (coercing Date/Close types,
+sorting by date, resetting index), returns summary metrics (counts, totals, longest
+streaks), a detailed runs table, and a cleaned DataFrame ready for visualization.
+
+Outputs (from compute_updown_runs):
+- up_runs_count, down_runs_count (int)
+- up_days_total, down_days_total (int)
+- longest_up, longest_down: dicts with {"len","start","end","start_idx","end_idx"}
+- runs: DataFrame columns ["dir","len","start","end","start_idx","end_idx"]
+- clean_df: cleaned DataFrame with ["Date","Close"] for plotting
+
+
+"""
+
 from __future__ import annotations
 from typing import Dict, Any, List
 import pandas as pd
@@ -144,4 +162,3 @@ def compute_updown_runs(df: pd.DataFrame) -> Dict[str, Any]:
         "runs": runs_df,
         "clean_df": data[["Date", "Close"]],   # <-- ready for plotting
     }
-

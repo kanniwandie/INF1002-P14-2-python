@@ -1,4 +1,20 @@
 # src/Calculations/max_profit.py
+
+"""
+Max Profit Utilities (Unlimited Transactions, Greedy)
+
+This module provides utilities for computing the maximum achievable profit under
+the “unlimited transactions, hold ≤ 1 share at a time” constraint (a.k.a.
+LeetCode 122) and for reconstructing the corresponding buy/sell trades.
+
+Key functions:
+- max_profit_unlimited: O(n) greedy sum of positive day-to-day increases.
+- extract_trades: Rebuilds valley→peak trade segments for explanation/plotting.
+- coerce_to_price_series: Normalizes input (Series/DataFrame) into a numeric
+  Close-price Series with an optional DatetimeIndex.
+
+"""
+
 from __future__ import annotations
 from typing import Union, List, Dict
 import numpy as np
@@ -8,9 +24,25 @@ import pandas as pd
 
 def coerce_to_price_series(data: Union[pd.Series, pd.DataFrame]) -> pd.Series:
     """
-    Accept Series or DataFrame and return a numeric Close-price Series.
-    - DataFrame: expects 'Close' and (optionally) 'Date' to set a DatetimeIndex.
-    - Series: converted to numeric (index may or may not be datetime).
+    Normalize input into a numeric Close-price Series.
+
+    Accepts either a Series or a DataFrame and returns a 1-D numeric Series
+    suitable for price-difference operations. If a DataFrame is provided and
+    contains a 'Date' column, it will be parsed to datetime and set as the
+    index (sorted ascending). NaNs in the resulting price vector are dropped.
+
+    Args:
+        data (pd.Series | pd.DataFrame): Input price container. For DataFrame,
+            a 'Close' column is required; a 'Date' column (optional) will be
+            parsed and used as a DatetimeIndex.
+
+    Returns:
+        pd.Series: Numeric Series of Close prices (index may be datetime if
+            'Date' was present and valid).
+
+    Raises:
+        ValueError: If a DataFrame is provided without a 'Close' column.
+        TypeError: If input is neither Series nor DataFrame.
     """
     if isinstance(data, pd.Series):
         return pd.to_numeric(data, errors="coerce").dropna()
@@ -30,8 +62,26 @@ def coerce_to_price_series(data: Union[pd.Series, pd.DataFrame]) -> pd.Series:
 
 def max_profit_unlimited(prices: Union[pd.Series, pd.DataFrame]) -> float:
     """
-    Best Time to Buy and Sell Stock II (multiple transactions, hold ≤ 1 share).
-    Greedy sum of positive day-to-day increases. Returns float profit.
+    Compute the maximum profit with unlimited transactions (hold ≤ 1 share).
+
+    Strategy:
+        Greedy accumulation of all positive day-to-day price increases:
+            profit = Σ max(0, p_t - p_{t-1})
+
+    Complexity:
+        O(n) time, O(1) extra space beyond the diff.
+
+    Args:
+        prices (pd.Series | pd.DataFrame): Price sequence or OHLCV frame. If a
+            DataFrame is given, the 'Close' column is used (and 'Date' may set
+            a DatetimeIndex).
+
+    Returns:
+        float: Total profit (non-negative).
+
+    Notes:
+        This assumes zero transaction costs and the ability to buy/sell within
+        the same day transitions only (no shorting, one position at a time).
     """
     s = coerce_to_price_series(prices)
     diff = s.diff().fillna(0.0)
@@ -40,8 +90,32 @@ def max_profit_unlimited(prices: Union[pd.Series, pd.DataFrame]) -> float:
 
 def extract_trades(dates: pd.Series, prices: pd.Series) -> List[Dict]:
     """
-    Reconstruct greedy valley→peak trades from Date & Close arrays.
-    Returns a list of dicts: {buy_date, buy_price, sell_date, sell_price, profit}
+    Reconstruct greedy valley→peak trades from aligned Date & Close arrays.
+
+    The reconstruction pairs local minima (valleys) with subsequent local
+    maxima (peaks) following the same greedy logic used by
+    `max_profit_unlimited`. Flat segments are resolved by forward-filling the
+    last non-zero slope sign to ensure deterministic turning points.
+
+    Args:
+        dates (pd.Series): Date-like sequence aligned with prices.
+        prices (pd.Series): Close prices aligned with dates.
+
+    Returns:
+        list[dict]: Each dict contains:
+            {
+                "buy_date": date,
+                "buy_price": float,
+                "sell_date": date,
+                "sell_price": float,
+                "profit": float  # sell_price - buy_price
+            }
+
+    Notes:
+        - Inputs are coerced to float prices and datetime-like dates internally.
+        - Only strictly profitable segments (sell_price > buy_price) are kept.
+        - Edge cases are handled so that a rising sequence at the start or end
+          still yields a valid buy or sell respectively.
     """
     # Ensure alignment and float dtype
     s = pd.Series(prices).astype(float).reset_index(drop=True)
