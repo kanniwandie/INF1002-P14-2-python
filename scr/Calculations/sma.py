@@ -8,7 +8,7 @@ function that returns pandas' rolling mean for reference/validation.
 """
 
 import pandas as pd
-import numpy as nps
+import numpy as np
 def compute_sma(series: pd.Series, window: int = 5) -> pd.Series:
     """
     Compute the Simple Moving Average (SMA) manually over a 1-D Series.
