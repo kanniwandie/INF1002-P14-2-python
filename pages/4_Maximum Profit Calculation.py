@@ -378,6 +378,7 @@ if show_trades_table:
 
 # Chart
 # NOTE: The price line is always shown; markers are conditional on 'show_markers' and non-empty trades.
+# Base price line
 base = alt.Chart(df).mark_line().encode(
     x=alt.X("Date:T", title="Date"),
     y=alt.Y("Close:Q", title="Price")
@@ -394,12 +395,30 @@ if show_markers and trades:
         "Price": [t["sell_price"] for t in trades],
         "Type": "Sell"
     })
-    markers = alt.Chart(pd.concat([buys, sells], ignore_index=True)).mark_point(size=85).encode(
-        x="Date:T", y="Price:Q",
-        shape=alt.Shape("Type:N", legend=None),
-        color=alt.Color("Type:N", legend=None),
-        tooltip=[alt.Tooltip("Type:N"), alt.Tooltip("Date:T"), alt.Tooltip("Price:Q", format=",.2f")]
+    points_df = pd.concat([buys, sells], ignore_index=True)
+
+    markers = alt.Chart(points_df).mark_point(size=85).encode(
+        x="Date:T",
+        y="Price:Q",
+        # keep distinct shapes for visual clarity
+        shape=alt.Shape(
+            "Type:N",
+            scale=alt.Scale(domain=["Buy", "Sell"], range=["triangle-up", "triangle-down"]),
+            legend=None  # <- show only one legend (color) to avoid duplication
+        ),
+        # color legend ON
+        color=alt.Color(
+            "Type:N",
+            scale=alt.Scale(domain=["Buy", "Sell"], range=["#00c853", "#ff5252"]),  # green/red
+            legend=alt.Legend(title="Trades", orient="top-left")
+        ),
+        tooltip=[
+            alt.Tooltip("Type:N"),
+            alt.Tooltip("Date:T"),
+            alt.Tooltip("Price:Q", format=",.2f")
+        ]
     )
+
     st.altair_chart(base + markers, use_container_width=True)
 else:
     st.altair_chart(base, use_container_width=True)
