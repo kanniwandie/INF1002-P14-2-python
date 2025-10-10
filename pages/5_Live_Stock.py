@@ -23,13 +23,56 @@ st.title("📊 Live Stock Dashboard")
 st.caption("Real-time market snapshot powered by Yahoo Finance.")
 
 # Controls (left sidebar)
+
 with st.sidebar:
     st.header("Inputs")
-    ticker = st.text_input("Ticker", value="AAPL").strip().upper()
+
+    # Popular list (label shown → symbol)
+    POPULAR = [
+        ("Apple", "AAPL"),
+        ("Microsoft", "MSFT"),
+        ("NVIDIA", "NVDA"),
+        ("Amazon", "AMZN"),
+        ("Alphabet (Google)", "GOOGL"),
+        ("Meta", "META"),
+        ("Tesla", "TSLA"),
+        ("S&P 500", "^GSPC"),
+    ]
+
+    # 1) Pre-load from session if available; else fallback to AAPL
+    session_ticker = (
+        st.session_state.get("cfg", {}).get("ticker")
+        or st.session_state.get("maxprofit_meta", {}).get("ticker")
+    )
+    default_ticker = (session_ticker or "AAPL").upper()
+
+    # Decide which dropdown item should be selected initially
+    symbol_lookup = {label: sym for label, sym in POPULAR}
+    reverse_lookup = {sym: label for label, sym in POPULAR}
+    default_label = reverse_lookup.get(default_ticker, "Custom…")
+
+    # 2) Popular tickers dropdown (+ Custom… option)
+    labels = [label for label, _ in POPULAR] + ["Custom…"]
+    # If default is not in popular, pick "Custom…"
+    default_index = labels.index(default_label) if default_label in labels else labels.index("Custom…")
+    label_choice = st.selectbox("Popular tickers", labels, index=default_index)
+
+    # 3) Custom ticker text box (shown always; if non-empty it overrides)
+    # Prefill with session ticker only if it isn't one of the populars
+    custom_prefill = "" if default_label != "Custom…" else default_ticker
+    custom_ticker = st.text_input("Or enter a custom ticker", value=custom_prefill, placeholder="e.g., IBM or ^GSPC").strip().upper()
+
+    # Final ticker resolution:
+    #   - If user typed something in "custom", it wins
+    #   - Else use the dropdown mapping
+    dropdown_symbol = symbol_lookup.get(label_choice)
+    ticker = (custom_ticker or dropdown_symbol or default_ticker).upper()
 
     # Yahoo-style ranges
     ranges = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "All"]
+    # If you want to remember the last used range across refreshes:
     sel_range = st.radio("Range", ranges, index=0, horizontal=True, label_visibility="visible")
+
 
 # Hard-code auto-refresh every 5 seconds
 st_autorefresh(interval=5_000, key="live_refresh_every_5s")

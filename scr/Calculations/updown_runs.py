@@ -149,7 +149,6 @@ def compute_updown_runs(df: pd.DataFrame) -> Dict[str, Any]:
 
     # close tail
     close_streak(len(closes) - 1)
-
     runs_df = pd.DataFrame(runs_list, columns=["dir", "len", "start", "end", "start_idx", "end_idx"])
 
     return {
