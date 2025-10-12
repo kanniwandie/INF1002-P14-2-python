@@ -47,7 +47,7 @@ http://localhost:8501
 
 Click it (or paste into a browser) — the dashboard will open. 
 
-3. Project Structure
+## Project Structure
 -------------------------------------
 ```Python
 Project/
