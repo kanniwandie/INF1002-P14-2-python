@@ -1,13 +1,12 @@
-# pages/4_Maximum Profit Calculation.py
+# pages/5_Live_Stock.py
 
 """
-Streamlit Page: Live Stock Dashboard
+Streamlit Page: Maximum Profit Calculation (Live Dashboard)
 
-This page provides a real-time market snapshot powered by Yahoo Finance. It
-supports multiple Yahoo-style time ranges for historical data, auto-refreshes
-every 5 seconds for live-ish updates, plots a clean price chart with Plotly,
-and shows a right-hand snapshot with common quote fields.
-
+This page provides a live stock dashboard powered by Yahoo Finance. 
+It displays real-time price updates every 5 seconds, supports multiple 
+historical ranges (1D–All), and includes a Plotly chart alongside 
+snapshot metrics such as market cap, EPS, and P/E ratio.
 """
 
 import streamlit as st
@@ -17,17 +16,20 @@ import plotly.graph_objects as go
 from datetime import datetime, date
 from streamlit_autorefresh import st_autorefresh
 
+# -----------------------------
+# Page setup and header
+# -----------------------------
 st.set_page_config(page_title="📊 Live Stock Dashboard", layout="wide")
-
 st.title("📊 Live Stock Dashboard")
 st.caption("Real-time market snapshot powered by Yahoo Finance.")
 
-# Controls (left sidebar)
-
+# -----------------------------
+# Sidebar controls (user inputs)
+# -----------------------------
 with st.sidebar:
     st.header("Inputs")
 
-    # Popular list (label shown → symbol)
+    # Popular tickers (label → symbol)
     POPULAR = [
         ("Apple", "AAPL"),
         ("Microsoft", "MSFT"),
@@ -39,60 +41,60 @@ with st.sidebar:
         ("S&P 500", "^GSPC"),
     ]
 
-    # 1) Pre-load from session if available; else fallback to AAPL
+    # Preload session ticker if available; default = AAPL
     session_ticker = (
         st.session_state.get("cfg", {}).get("ticker")
         or st.session_state.get("maxprofit_meta", {}).get("ticker")
     )
     default_ticker = (session_ticker or "AAPL").upper()
 
-    # Decide which dropdown item should be selected initially
+    # Map labels ↔ symbols for dropdown selection
     symbol_lookup = {label: sym for label, sym in POPULAR}
     reverse_lookup = {sym: label for label, sym in POPULAR}
     default_label = reverse_lookup.get(default_ticker, "Custom…")
 
-    # 2) Popular tickers dropdown (+ Custom… option)
+    # Dropdown with “Custom…” option
     labels = [label for label, _ in POPULAR] + ["Custom…"]
-    # If default is not in popular, pick "Custom…"
     default_index = labels.index(default_label) if default_label in labels else labels.index("Custom…")
     label_choice = st.selectbox("Popular tickers", labels, index=default_index)
 
-    # 3) Custom ticker text box (shown always; if non-empty it overrides)
-    # Prefill with session ticker only if it isn't one of the populars
+    # Custom ticker text input (overrides dropdown if filled)
     custom_prefill = "" if default_label != "Custom…" else default_ticker
-    custom_ticker = st.text_input("Or enter a custom ticker", value=custom_prefill, placeholder="e.g., IBM or ^GSPC").strip().upper()
+    custom_ticker = st.text_input(
+        "Or enter a custom ticker",
+        value=custom_prefill,
+        placeholder="e.g., IBM or ^GSPC"
+    ).strip().upper()
 
-    # Final ticker resolution:
-    #   - If user typed something in "custom", it wins
-    #   - Else use the dropdown mapping
+    # Final ticker resolution (custom > dropdown > default)
     dropdown_symbol = symbol_lookup.get(label_choice)
     ticker = (custom_ticker or dropdown_symbol or default_ticker).upper()
 
-    # Yahoo-style ranges
+    # Time range selection
     ranges = ["1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "All"]
-    # If you want to remember the last used range across refreshes:
     sel_range = st.radio("Range", ranges, index=0, horizontal=True, label_visibility="visible")
 
-
-# Hard-code auto-refresh every 5 seconds
+# -----------------------------
+# Auto-refresh setup (5 seconds)
+# -----------------------------
 st_autorefresh(interval=5_000, key="live_refresh_every_5s")
 st.caption("⏳ Auto-refresh: every **5s**")
 
-# Data fetch helpers
+# -----------------------------
+# Helper: Convert range → yfinance args
+# -----------------------------
 def range_to_history_args(rng: str):
     """
-    Translate a human-readable range into yfinance.history() keyword arguments.
+    Translate a range label into yfinance.history() parameters.
 
     Args:
-        rng (str): Range label from the UI (e.g., "1D", "1M", "YTD", "All").
+        rng (str): Range from the UI (e.g., '1D', '1M', 'YTD', 'All').
 
     Returns:
-        dict: Keyword arguments suitable for yf.Ticker(...).history(**kwargs),
-              selecting a period/start and an interval that keep a reasonable
-              number of points and intraday granularity when appropriate.
+        dict: Parameters for yf.Ticker().history() with period/start and interval.
     """
     if rng == "1D":
-        return dict(period="1d", interval="1m")    # intraday 1-minute
+        return dict(period="1d", interval="1m")  # 1-min intraday data
     if rng == "5D":
         return dict(period="5d", interval="5m")
     if rng == "1M":
@@ -106,58 +108,60 @@ def range_to_history_args(rng: str):
         return dict(period="1y", interval="1d")
     if rng == "5Y":
         return dict(period="5y", interval="1wk")
-    # All available history (max)
-    return dict(period="max", interval="1wk")
+    return dict(period="max", interval="1wk")  # Default: full range
 
-@st.cache_data(ttl=4)  # re-use for 4s between the 5s refreshes
+# -----------------------------
+# Helper: Fetch snapshot + history
+# -----------------------------
+@st.cache_data(ttl=4)
 def fetch_snapshot_and_history(ticker: str, rng: str):
     """
-    Fetch a lightweight quote snapshot and the historical time series for a ticker.
-
-    This function first attempts to use fast_info for quick fields, falling back
-    to .info where needed. Then it pulls history based on the selected range and
-    normalizes the result to include a Date column and numeric Close.
+    Fetch live snapshot and historical price data for a given ticker.
 
     Args:
-        ticker (str): Symbol to fetch, e.g., "AAPL".
-        rng (str): UI range label to control period/interval (see range_to_history_args).
+        ticker (str): Stock symbol (e.g., 'AAPL').
+        rng (str): Selected range label (controls period/interval).
 
     Returns:
         tuple[dict, pd.DataFrame]:
-            - info (dict): Best-effort merged snapshot fields (may vary by ticker).
-            - df (pd.DataFrame): Historical data with at least ["Date","Close"].
-                                 Empty if no data is returned.
+            info (dict): Snapshot fields (fast_info + info).
+            df (pd.DataFrame): Historical prices with columns ['Date','Close'].
     """
     stock = yf.Ticker(ticker)
     info = stock.fast_info if hasattr(stock, "fast_info") else {}
-    # fall back to .info for fields fast_info may not provide
+
+    # Fallback to .info for missing fields
     try:
         info_full = stock.info
         info = {**info_full, **info}
     except Exception:
         pass
 
+    # Retrieve price history
     args = range_to_history_args(rng)
     df = stock.history(**args)
     if not df.empty:
         df = df.reset_index().rename(columns={"Datetime": "Date"})
-        # ensure we always have "Date" and "Close"
         if "Date" not in df.columns:
-            # sometimes index is already a datetime index named something else
             df["Date"] = df.index
         df["Date"] = pd.to_datetime(df["Date"])
         df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
     return info, df
 
-# Fetch & guard
+# -----------------------------
+# Fetch data and handle missing cases
+# -----------------------------
 info, df = fetch_snapshot_and_history(ticker, sel_range)
 if df is None or df.empty:
     st.error("No data returned. Try a different range or ticker.")
     st.stop()
 
+# -----------------------------
 # Layout: Chart (left) + Snapshot (right)
+# -----------------------------
 left, right = st.columns([2, 1])
 
+# --- Left: Plot chart ---
 with left:
     title = f"{ticker} Price — {sel_range}"
     st.subheader(title)
@@ -172,17 +176,21 @@ with left:
         y = chart_df["Close"].values
         x = chart_df["Date"].values
 
-        # Padding for visibility
+        # Add small y-padding for visual clarity
         y_min, y_max = float(y.min()), float(y.max())
         pad = max((y_max - y_min) * 0.06, 0.5)
         y_range = [y_min - pad, y_max + pad]
 
         prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
-        last_price = (info.get("last_price") or info.get("regularMarketPrice") or (y[-1] if len(y) else None))
+        last_price = (
+            info.get("last_price") or 
+            info.get("regularMarketPrice") or 
+            (y[-1] if len(y) else None)
+        )
 
         fig = go.Figure()
 
-        # Simple clean line chart
+        # Add price line
         fig.add_trace(go.Scatter(
             x=x, y=y,
             mode="lines",
@@ -190,14 +198,13 @@ with left:
             name="Close"
         ))
 
-        # Reference lines
+        # Reference lines for last and previous close
         if isinstance(last_price, (int, float)):
             fig.add_hline(y=last_price, line_dash="dot", line_color="blue", opacity=0.6)
-
         if isinstance(prev_close, (int, float)):
             fig.add_hline(y=prev_close, line_dash="dash", line_color="gray", opacity=0.4)
 
-        # Minimal layout (no grid, no axis titles)
+        # Minimal clean layout
         fig.update_layout(
             template="plotly_white",
             height=420,
@@ -209,27 +216,26 @@ with left:
 
         st.plotly_chart(fig, use_container_width=True)
 
+# --- Right: Snapshot section ---
 with right:
     st.subheader("Snapshot")
-    # Try to read live-ish fields defensively
+
+    # Key live data fields
     price = info.get("last_price") or info.get("regularMarketPrice")
     delta = info.get("regularMarketChange", None)
     pct   = info.get("regularMarketChangePercent", None)
 
-    if isinstance(price, (int, float)):
-        price_str = f"{price:.2f}"
-    else:
-        price_str = "—"
-
-    delta_str = None
-    if isinstance(delta, (int, float)) and isinstance(pct, (int, float)):
-        delta_str = f"{delta:+.2f} ({pct:+.2f}%)"
-    elif isinstance(delta, (int, float)):
-        delta_str = f"{delta:+.2f}"
+    # Format primary metric
+    price_str = f"{price:.2f}" if isinstance(price, (int, float)) else "—"
+    delta_str = (
+        f"{delta:+.2f} ({pct:+.2f}%)"
+        if isinstance(delta, (int, float)) and isinstance(pct, (int, float))
+        else (f"{delta:+.2f}" if isinstance(delta, (int, float)) else None)
+    )
 
     st.metric(f"{ticker} Price", price_str, delta=delta_str)
 
-    # Secondary fields (best-effort, may vary by ticker)
+    # Secondary snapshot values
     prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
     open_px    = info.get("open") or info.get("regularMarketOpen")
     day_low    = info.get("dayLow")
@@ -244,18 +250,20 @@ with right:
 
     def fmt(x, digits=2):
         """
-        Format a value for compact display in the snapshot panel.
+        Format numeric or text values for display.
 
         Args:
-            x: Value to format (numeric or other).
-            digits (int): Number of decimal places for numeric types.
+            x: Value to format (numeric or object).
+            digits (int): Decimal precision for floats.
 
         Returns:
-            str: "—" for None/NaN; otherwise a string with the requested precision
-                 (or passthrough for non-numeric values).
+            str: Formatted value or "—" if missing.
         """
-        return "—" if x is None or (isinstance(x, float) and pd.isna(x)) else (f"{x:.{digits}f}" if isinstance(x, (int,float)) else x)
+        return "—" if x is None or (isinstance(x, float) and pd.isna(x)) else (
+            f"{x:.{digits}f}" if isinstance(x, (int, float)) else x
+        )
 
+    # Display key market metrics
     st.write("**At close:**", fmt(prev_close))
     st.write("**Open:**", fmt(open_px))
     st.write("**Day's range:**", f"{fmt(day_low)} – {fmt(day_high)}")
@@ -266,5 +274,9 @@ with right:
     st.write("**EPS (TTM):**", fmt(eps_ttm))
     st.write("**Forward Dividend & Yield:**", f"{fmt(div_yield*100 if isinstance(div_yield,(int,float)) else div_yield)}%")
 
-# footer
-st.caption(f"Range: **{sel_range}** • Data source: yfinance • Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+# -----------------------------
+# Footer
+# -----------------------------
+st.caption(
+    f"Range: **{sel_range}** • Data source: yfinance • Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+)

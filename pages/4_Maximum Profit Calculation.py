@@ -9,61 +9,45 @@ price series. It supports three data sources (existing session data, Yahoo
 Finance fetch, or user-uploaded CSV/Excel), canonicalizes the dataset to
 Date/Open/High/Low/Close/Volume, reconstructs greedy trades for explanation/
 plotting, and provides quick summary plus validation test cases.
-
 """
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Imports
-# ──────────────────────────────────────────────────────────────────────────────
-# NOTE: Keep imports minimal on Streamlit pages to avoid slow reloads.
 import pandas as pd
 import streamlit as st
 import altair as alt
 
-from scr.Calculations import ALGORITHMS                     # registry (names → run funcs)
-from scr.data.data import fetch_raw_yf, POPULAR_TICKERS     # Yahoo data access + presets
-from scr.data.data_preprocessing import standardize_ohlcv, quick_summary  # cleaning utils
+from scr.Calculations import ALGORITHMS
+from scr.data.data import fetch_raw_yf, POPULAR_TICKERS
+from scr.data.data_preprocessing import standardize_ohlcv, quick_summary
 
 st.set_page_config(page_title="Max Profit — Unlimited Transactions", layout="wide")
 
-# -----------------------
+# ------------------------------------------------------------------
 # Page-local state
-# -----------------------
-# NOTE: We isolate page state so switching pages won’t clobber global session keys.
+# ------------------------------------------------------------------
+# NOTE: Isolate page-specific keys so other pages don't clobber values.
 st.session_state.setdefault("maxprofit_df", None)
 st.session_state.setdefault("maxprofit_source", None)
 st.session_state.setdefault("maxprofit_meta", {"source": None, "ticker": None, "origin": None, "label": None})
-st.session_state.setdefault("maxprofit_fp", None)  # fingerprint of session data
+st.session_state.setdefault("maxprofit_fp", None)  # fingerprint of session data to detect changes
 
-# -----------------------
+# ------------------------------------------------------------------
 # Helpers
-# -----------------------
+# ------------------------------------------------------------------
 def canonicalize(df: pd.DataFrame) -> pd.DataFrame:
     """Run once to enforce Date/Open/High/Low/Close/Volume, sorted unique dates."""
-    # NOTE: standardize_ohlcv returns a frame indexed by Date; reset_index to get a Date column.
+    # NOTE: standardize_ohlcv returns a Date index; convert back to a column for Altair/Streamlit.
     return standardize_ohlcv(df).reset_index()[["Date", "Open", "High", "Low", "Close", "Volume"]]
+
 
 @st.cache_data(show_spinner=False)
 def load_yf_clean(ticker: str, start: str, end: str, auto_adj: bool) -> pd.DataFrame:
-    """
-    Fetch prices from Yahoo Finance and return a canonical OHLCV DataFrame.
-
-    Args:
-        ticker (str): Symbol to fetch (e.g., "AAPL", "^GSPC").
-        start (str): Start date in "YYYY-MM-DD".
-        end   (str): End date in "YYYY-MM-DD".
-        auto_adj (bool): If True, apply Yahoo auto-adjust for splits/dividends.
-
-    Returns:
-        pd.DataFrame: Canonicalized DataFrame with columns
-                      ["Date","Open","High","Low","Close","Volume"].
-                      Empty DataFrame if no data is returned.
-    """
-    # NOTE: fetch_raw_yf returns raw schema; canonicalize normalizes to our six columns.
+    """Fetch prices from Yahoo Finance and return canonical OHLCV DataFrame."""
+    # NOTE: fetch_raw_yf may return differing schemas by ticker/range; canonicalize normalizes it.
     raw = fetch_raw_yf(ticker, start, end, auto_adjust=auto_adj)
     if raw is None or raw.empty:
         return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
     return canonicalize(raw)
+
 
 @st.cache_data(show_spinner=False)
 def load_csv_clean(file) -> pd.DataFrame:
@@ -86,14 +70,14 @@ def load_csv_clean(file) -> pd.DataFrame:
         except Exception:
             return None
 
-    # -------- Prefer by extension ---------- #
+    # Prefer by file extension first (faster, less I/O thrash)
     is_excel_ext = name.endswith((".xlsx", ".xls"))
     if is_excel_ext:
-        # Read Excel (try each sheet)
+        # Read Excel (try each sheet until one standardizes)
         try:
             xl = pd.read_excel(file, sheet_name=None)  # dict of DataFrames
         except Exception:
-            # In case the stream was read before
+            # If the file pointer was consumed, rewind and try again
             try:
                 if hasattr(file, "seek"):
                     file.seek(0)
@@ -101,14 +85,14 @@ def load_csv_clean(file) -> pd.DataFrame:
             except Exception:
                 return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
 
-        for sheet_name, df in xl.items():
+        for _, df in xl.items():
             out = _canonical_or_none(df)
             if out is not None:
                 return out
-        # nothing worked
+        # Nothing worked → empty canonical frame
         return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
 
-    # -------- Try CSV first ---------- #
+    # Try CSV path
     try:
         df_csv = pd.read_csv(file)
         out = _canonical_or_none(df_csv)
@@ -117,42 +101,38 @@ def load_csv_clean(file) -> pd.DataFrame:
     except Exception:
         pass  # fall through to Excel retry
 
-    # -------- Retry as Excel in case CSV-reading “succeeded” on a real Excel -------- #
+    # Retry as Excel in case CSV-reading “succeeded” on an actual Excel stream
     try:
         if hasattr(file, "seek"):
             file.seek(0)
         xl = pd.read_excel(file, sheet_name=None)
-        for sheet_name, df in xl.items():
+        for _, df in xl.items():
             out = _canonical_or_none(df)
             if out is not None:
                 return out
     except Exception:
-        # final fallback: empty canonical frame
+        # Final fallback: empty canonical frame
         return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
 
     return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])
 
-def set_df(df: pd.DataFrame, ok_msg: str):
-    """
-    Store a validated dataset into page-local session state and show a status message.
 
-    Args:
-        df (pd.DataFrame): DataFrame to store.
-        ok_msg (str): Success message to display if df is non-empty.
-    """
-    # NOTE: Keep user feedback short; noisy errors reduce usability.
+def set_df(df: pd.DataFrame, ok_msg: str):
+    """Store a validated dataset into session state and show success message."""
+    # NOTE: Keep feedback concise; noisy toasts degrade UX.
     if df is None or df.empty:
         st.error("No data returned.")
     else:
         st.session_state["maxprofit_df"] = df
         st.success(ok_msg)
 
+
 def session_fingerprint() -> tuple | None:
     """
     Lightweight fingerprint to detect if session data changed
     without heavy hashing. Returns None if no usable session data.
     """
-    # NOTE: I avoid hashing entire frames; a tuple of simple props is enough to invalidate cache.
+    # NOTE: Avoid hashing entire frames; a tuple of light props is enough to invalidate cache.
     df = st.session_state.get("data")
     cfg = st.session_state.get("cfg", {})
     if isinstance(df, pd.DataFrame) and not df.empty:
@@ -164,13 +144,13 @@ def session_fingerprint() -> tuple | None:
                 len(df),
             )
         except Exception:
-            # If columns differ, still give a simple shape-based fp
+            # If columns differ, still give a simple shape-based fingerprint
             return (cfg.get("ticker"), len(df))
     return None
 
-# =======================
-# SIDEBAR
-# =======================
+# ------------------------------------------------------------------
+# Sidebar (data selection & loading)
+# ------------------------------------------------------------------
 with st.sidebar:
     st.header("Data Controls")
 
@@ -181,17 +161,17 @@ with st.sidebar:
         help="Pick where to load the price data from."
     )
 
-    # Clear page-local data & meta when source changes
+    # Reset page-local caches/metadata when source changes
     if st.session_state["maxprofit_source"] != source:
         st.session_state["maxprofit_df"] = None
         st.session_state["maxprofit_source"] = source
         st.session_state["maxprofit_meta"] = {"source": None, "ticker": None, "origin": None, "label": None}
-        st.session_state["maxprofit_fp"] = None  # reset fingerprint too
+        st.session_state["maxprofit_fp"] = None
 
     with st.expander("Advanced settings", expanded=False):
-        # NOTE: Auto-adjust aligns Yahoo data with splits/dividends; leave ON by default.
+        # NOTE: Auto-adjust aligns Yahoo data with splits/dividends; keep ON by default.
         auto_adj = st.checkbox("Auto-adjust prices (splits/dividends)", value=True)
-        # NOTE: These toggles only affect UI rendering, not computation.
+        # NOTE: UI-only toggles; do not affect algorithm results.
         show_trades_table = st.checkbox("Show trades table", value=True)
         show_markers = st.checkbox("Show buy/sell markers on chart", value=True)
 
@@ -221,7 +201,7 @@ with st.sidebar:
                     st.error(f"Failed to read session data: {e}")
 
     elif source == "Yahoo Finance":
-        # Popular OR custom ticker
+        # Choose popular or custom ticker
         label_options = [name for name, _ in POPULAR_TICKERS] + ["Custom…"]
         col_sym, col_custom = st.columns([1, 1])
         with col_sym:
@@ -234,12 +214,12 @@ with st.sidebar:
                 key="yf_custom_input",
             ).strip().upper()
 
-        # Resolve final ticker (map label → symbol, or use custom)
+        # Resolve final ticker (label → symbol) or use custom
         ticker = dict(POPULAR_TICKERS).get(label, None)
         if label == "Custom…":
             ticker = custom_ticker
 
-        # Date range
+        # Date range for Yahoo pull
         date_range = st.date_input(
             "Date range",
             value=(pd.Timestamp.today().normalize() - pd.Timedelta(days=365),
@@ -251,6 +231,7 @@ with st.sidebar:
             if not ticker:
                 st.error("Please select a popular ticker or enter a custom ticker.")
             else:
+                # Normalize selected date range
                 if isinstance(date_range, tuple) and len(date_range) == 2:
                     start, end = map(lambda d: pd.Timestamp(d).strftime("%Y-%m-%d"), date_range)
                 else:
@@ -262,7 +243,7 @@ with st.sidebar:
                     st.error(f"No data returned for {ticker}. Try a different ticker or range.")
                 else:
                     set_df(tmp, f"Loaded {ticker} from {start} to {end}.")
-                    # Record meta: popular vs custom
+                    # Record meta: whether selection came from popular list or custom input
                     origin = "custom" if label == "Custom…" else "popular"
                     label_name = custom_ticker if origin == "custom" else label
                     st.session_state["maxprofit_meta"] = {
@@ -286,7 +267,9 @@ with st.sidebar:
                     "label": None,
                 }
 
-# Resolve working dataset strictly from page-local state
+# ------------------------------------------------------------------
+# Data validation (gate the main area)
+# ------------------------------------------------------------------
 df = st.session_state["maxprofit_df"]
 meta = st.session_state["maxprofit_meta"]
 
@@ -295,15 +278,14 @@ if df is None or df.empty:
     st.info("Use the **sidebar** to load data (Session, Yahoo, or Upload).")
     st.stop()
 
-# ──────────────────────────────────────────────────────────────────────────────
-# MAIN AREA
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------
+# Main area
+# ------------------------------------------------------------------
 st.title("💰 Max Profit — Unlimited Transactions (Greedy)")
 st.caption("Implements Best Time to Buy and Sell Stock II (LeetCode 122) — greedy valley→peak.")
 
-# Source/ticker badge
+# Cosmetic badge: where data came from
 if meta and meta.get("ticker"):
-    # NOTE: Cosmetic caption showing where the data came from.
     if meta.get("origin") == "popular":
         st.caption(f"Source: **{meta.get('source')}** • Ticker: **{meta.get('ticker')}** (Popular: **{meta.get('label')}**)")
     elif meta.get("origin") == "custom":
@@ -315,49 +297,38 @@ if meta and meta.get("ticker"):
     else:
         st.caption(f"Source: **{meta.get('source') or 'Unknown'}** • Ticker: **{meta.get('ticker')}**")
 
-# df is canonical already — no need to re-coerce dates/numerics or re-sort
-
-# Quick summary
+# Quick dataset summary (safe on index or Date column)
 with st.expander("Quick summary", expanded=False):
-    # NOTE: quick_summary reads either index or Date column safely.
     st.caption(quick_summary(df))
-    
-# Algorithm picker
-algo_choice = st.radio(
-    "Algorithm",
-    list(ALGORITHMS.keys()),
-    horizontal=True,
-    index=0
-)
 
-# Fee input only for LC714
+# Choose algorithm from registry
+algo_choice = st.radio("Algorithm", list(ALGORITHMS.keys()), horizontal=True, index=0)
+
+# Transaction fee input only used by LC714 (with fees)
 fee = 0.0
 if "LC714" in algo_choice:
-    # NOTE: Fee per *completed trade* (buy+sell); passed to LC714 runner via registry.
+    # NOTE: Fee per completed trade (buy+sell); passed into the LC714 runner.
     fee = st.number_input("Transaction fee per trade", min_value=0.0, value=1.0, step=0.1)
 
-# --- Single dispatch ---
-# NOTE: Keep a single call to avoid double-computation and to preserve LC714 fee usage.
+# Single dispatch (avoid duplicate computations)
 if "LC714" in algo_choice:
     trades, total_profit, meta_algo = ALGORITHMS[algo_choice](df["Date"], df["Close"], fee)
 else:
     trades, total_profit, meta_algo = ALGORITHMS[algo_choice](df["Date"], df["Close"])
 
-# Result
+# Result banner
 st.subheader("Result")
 # NOTE: meta_algo['label'] comes from each runner (LC122/LC121/LC714); trades may be [] for LC714.
 st.success(f"{meta_algo.get('label','Algorithm')} — Maximum Profit: **{total_profit:.2f}**  • Trades: **{len(trades)}**")
 
-#Quick side-by-side comparison
+# Side-by-side algorithm comparison (quick peek)
 with st.expander("Quick Profit Comparison", expanded=False):
-    # If user is on LC714, reuse their chosen fee; otherwise offer a preview fee
-    if "LC714" in algo_choice:
-        fee_cmp = fee
-    else:
-        fee_cmp = st.number_input("Preview fee for LC714", min_value=0.0, value=1.0, step=0.1, key="cmp_fee")
+    # If user is on LC714, reuse their chosen fee; otherwise let them preview a fee
+    fee_cmp = fee if "LC714" in algo_choice else st.number_input(
+        "Preview fee for LC714", min_value=0.0, value=1.0, step=0.1, key="cmp_fee"
+    )
 
-    # Compute profits for each algo via the registry
-    # NOTE: We call each runner directly to avoid duplicating algorithm code on the page.
+    # Call each registered runner directly (keeps page logic minimal)
     _, p122, _ = ALGORITHMS["Unlimited (LC122)"](df["Date"], df["Close"])
     _, p121, _ = ALGORITHMS["Single (LC121)"](df["Date"], df["Close"])
     _, p714, _ = ALGORITHMS["With Fee (LC714)"](df["Date"], df["Close"], fee_cmp)
@@ -367,23 +338,22 @@ with st.expander("Quick Profit Comparison", expanded=False):
         "Profit": [p122, p121, p714]
     }))
 
-# Trades table (optional)
+# Optional trades table
 if show_trades_table:
     st.subheader("Buy/Sell Plan (Greedy valley→peak)")
-    # NOTE: LC121 returns a single trade (if profitable). LC714 returns [] by design (fast version).
+    # NOTE: LC121 returns a single trade (if profitable). LC714 may return [] (fast version).
     st.dataframe(
         pd.DataFrame(trades) if trades else pd.DataFrame(columns=["buy_date", "buy_price", "sell_date", "sell_price", "profit"]),
         use_container_width=True
     )
 
-# Chart
-# NOTE: The price line is always shown; markers are conditional on 'show_markers' and non-empty trades.
-# Base price line
+# Base price line (always shown)
 base = alt.Chart(df).mark_line().encode(
     x=alt.X("Date:T", title="Date"),
     y=alt.Y("Close:Q", title="Price")
 ).properties(height=360)
 
+# Optional buy/sell markers on top of the base line
 if show_markers and trades:
     buys = pd.DataFrame({
         "Date": [pd.to_datetime(t["buy_date"]) for t in trades],
@@ -400,35 +370,30 @@ if show_markers and trades:
     markers = alt.Chart(points_df).mark_point(size=85).encode(
         x="Date:T",
         y="Price:Q",
-        # keep distinct shapes for visual clarity
+        # NOTE: Distinct shapes help distinguish actions; suppress duplicate legends.
         shape=alt.Shape(
             "Type:N",
             scale=alt.Scale(domain=["Buy", "Sell"], range=["triangle-up", "triangle-down"]),
-            legend=None  # <- show only one legend (color) to avoid duplication
+            legend=None
         ),
-        # color legend ON
+        # NOTE: Keep the color legend only (clear single legend).
         color=alt.Color(
             "Type:N",
             scale=alt.Scale(domain=["Buy", "Sell"], range=["#00c853", "#ff5252"]),  # green/red
             legend=alt.Legend(title="Trades", orient="top-left")
         ),
-        tooltip=[
-            alt.Tooltip("Type:N"),
-            alt.Tooltip("Date:T"),
-            alt.Tooltip("Price:Q", format=",.2f")
-        ]
+        tooltip=[alt.Tooltip("Type:N"), alt.Tooltip("Date:T"), alt.Tooltip("Price:Q", format=",.2f")]
     )
 
     st.altair_chart(base + markers, use_container_width=True)
 else:
     st.altair_chart(base, use_container_width=True)
 
-# =======================
-# VALIDATION RESULTS
-# =======================
+# ------------------------------------------------------------------
+# Validation results
+# ------------------------------------------------------------------
 with st.expander("Validation (auto tests)", expanded=False):
     try:
-        import pandas as pd
         from scr.Calculations.max_profit import max_profit_unlimited
         from scr.Calculations.lc121_single import max_profit_single
         from scr.Calculations.lc714_fee import max_profit_fee
@@ -474,9 +439,9 @@ with st.expander("Validation (auto tests)", expanded=False):
                 st.write(f"{label}: prices={arr}, fee={fee_v} → profit={got:.2f} (expect {expect:.2f}) "
                          + ("✅" if abs(got-expect) < 1e-9 else "❌"))
 
-        # NOTE: Keep a single success banner to avoid confusion; ensure label is set above.
+        # Single success banner at the end (after loops) keeps UI tidy
         st.success(f"All {label} validation cases passed.")
 
     except Exception as e:
-        # NOTE: Catch-all so internal object reprs don’t leak giant docstrings to UI.
+        # NOTE: Catch-all so internal object reprs don’t leak giant tracebacks to end users.
         st.error(f"Validation error: {e}")
