@@ -83,12 +83,15 @@ Project/
 ```
 
 
-NF1002 - Stock Market Analysis
 
-Name                     Student ID
-Chen Xiyuan              2502962
-Pyie Sone Khain Min      2502597
-Lin Min Thaw             2500010
-Teo Jit Yu Arthur        2500358
-Pyae Phyo Thu            2502277
+## NF1002 - Stock Market Analysis
+
+| **Name**                | **Student ID** |
+|--------------------------|----------------|
+| Chen Xiyuan             | 2502962        |
+| Pyie Sone Khain Min      | 2502597        |
+| Lin Min Thaw             | 2500010        |
+| Teo Jit Yu Arthur        | 2500358        |
+| Pyae Phyo Thu            | 2502277        |
+
 
