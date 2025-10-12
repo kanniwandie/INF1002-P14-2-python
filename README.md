@@ -49,6 +49,7 @@ Click it (or paste into a browser) — the dashboard will open.
 
 3. Project Structure
 -------------------------------------
+```Python
 Project/
 ├── .vscode/
 │   ├── launch.json
@@ -78,4 +79,5 @@ Project/
 │   │   ├── sma_chart.py
 │   │   └── updown_chart.py
 ├── .gitignore                     
-└── Starting_page.py            
+└── Starting_page.py       
+```     
