@@ -9,7 +9,6 @@ price series. It supports three data sources (existing session data, Yahoo
 Finance fetch, or user-uploaded CSV/Excel), canonicalizes the dataset to
 Date/Open/High/Low/Close/Volume, reconstructs greedy trades for explanation/
 plotting, and provides quick summary plus validation test cases.
-
 """
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -44,7 +43,6 @@ def canonicalize(df: pd.DataFrame) -> pd.DataFrame:
     return standardize_ohlcv(df).reset_index()[["Date", "Open", "High", "Low", "Close", "Volume"]]
 
 @st.cache_data(show_spinner=False)
-
 def load_yf_clean(ticker: str, start: str, end: str, auto_adj: bool) -> pd.DataFrame:
     """
     Fetch prices from Yahoo Finance and return a canonical OHLCV DataFrame.
@@ -67,7 +65,6 @@ def load_yf_clean(ticker: str, start: str, end: str, auto_adj: bool) -> pd.DataF
     return canonicalize(raw)
 
 @st.cache_data(show_spinner=False)
-
 def load_csv_clean(file) -> pd.DataFrame:
     """
     Robust loader for CSV/Excel. Tries CSV; if canonicalization fails or the file
@@ -323,7 +320,7 @@ if meta and meta.get("ticker"):
 with st.expander("Quick summary", expanded=False):
     # NOTE: quick_summary reads either index or Date column safely.
     st.caption(quick_summary(df))
-    
+
 # Algorithm picker
 algo_choice = st.radio(
     "Algorithm",
@@ -349,7 +346,7 @@ st.subheader("Result")
 # NOTE: meta_algo['label'] comes from each runner (LC122/LC121/LC714); trades may be [] for LC714.
 st.success(f"{meta_algo.get('label','Algorithm')} — Maximum Profit: **{total_profit:.2f}**  • Trades: **{len(trades)}**")
 
-#Quick side-by-side comparison
+# Quick side-by-side comparison
 with st.expander("Quick Profit Comparison", expanded=False):
     # If user is on LC714, reuse their chosen fee; otherwise offer a preview fee
     if "LC714" in algo_choice:
@@ -429,7 +426,6 @@ else:
 # =======================
 with st.expander("Validation (auto tests)", expanded=False):
     try:
-        import pandas as pd
         from scr.Calculations.max_profit import max_profit_unlimited
         from scr.Calculations.lc121_single import max_profit_single
         from scr.Calculations.lc714_fee import max_profit_fee
@@ -514,5 +510,5 @@ with st.expander("Validation (auto tests)", expanded=False):
             st.success(f"All {label} validation cases passed.")
 
     except Exception as e:
-        # NOTE: Catch-all so internal object reprs don’t leak giant docstrings to UI.
+        # NOTE: Catch-all so internal object reprs don’t leak giant tracebacks to end users.
         st.error(f"Validation error: {e}")
