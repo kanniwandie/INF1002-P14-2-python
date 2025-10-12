@@ -44,6 +44,7 @@ def canonicalize(df: pd.DataFrame) -> pd.DataFrame:
     return standardize_ohlcv(df).reset_index()[["Date", "Open", "High", "Low", "Close", "Volume"]]
 
 @st.cache_data(show_spinner=False)
+
 def load_yf_clean(ticker: str, start: str, end: str, auto_adj: bool) -> pd.DataFrame:
     """
     Fetch prices from Yahoo Finance and return a canonical OHLCV DataFrame.
@@ -66,6 +67,7 @@ def load_yf_clean(ticker: str, start: str, end: str, auto_adj: bool) -> pd.DataF
     return canonicalize(raw)
 
 @st.cache_data(show_spinner=False)
+
 def load_csv_clean(file) -> pd.DataFrame:
     """
     Robust loader for CSV/Excel. Tries CSV; if canonicalization fails or the file
@@ -329,7 +331,6 @@ algo_choice = st.radio(
     horizontal=True,
     index=0
 )
-
 # Fee input only for LC714
 fee = 0.0
 if "LC714" in algo_choice:
@@ -432,6 +433,7 @@ with st.expander("Validation (auto tests)", expanded=False):
         from scr.Calculations.max_profit import max_profit_unlimited
         from scr.Calculations.lc121_single import max_profit_single
         from scr.Calculations.lc714_fee import max_profit_fee
+        import math
 
         # NOTE: Keep these tests tiny, deterministic, and matching LeetCode examples.
         if algo_choice == "Unlimited (LC122)":
@@ -443,10 +445,41 @@ with st.expander("Validation (auto tests)", expanded=False):
                 ([3,3,5,0,0,3,1,4], 8.0),
             ]
             label = "LC122"
+
+            # Trusted reference: sum of positive price differences
+            def trusted_lc122(prices):
+                p = pd.Series(prices, dtype="float64").dropna()
+                if len(p) < 2:
+                    return 0.0
+                return float(p.diff().clip(lower=0).sum())
+
+            # Build a summary table
+            rows = []
             for arr, expect in tests:
-                got = float(max_profit_unlimited(pd.Series(arr)))
-                st.write(f"{label}: prices={arr} → profit={got:.2f} (expect {expect:.2f}) "
-                         + ("✅" if abs(got-expect) < 1e-9 else "❌"))
+                algo_profit = float(max_profit_unlimited(pd.Series(arr)))
+                trusted_profit = trusted_lc122(arr)
+                passed = (
+                    math.isclose(algo_profit, expect, rel_tol=1e-9)
+                    and math.isclose(algo_profit, trusted_profit, rel_tol=1e-9)
+                )
+                rows.append({
+                    "Test Case": str(arr),
+                    "Algorithm Profit": round(algo_profit, 6),
+                    "Expected (Manual)": round(expect, 6),
+                    "Trusted Method": round(trusted_profit, 6),
+                    "Result": "PASS" if passed else "FAIL",
+                })
+
+            st.write("**LC122 Validation Summary**")
+            df = pd.DataFrame(rows, columns=[
+                "Test Case", "Algorithm Profit", "Expected (Manual)", "Trusted Method", "Result"
+            ])
+            st.dataframe(df, use_container_width=True)
+
+            if df["Result"].eq("PASS").all():
+                st.success("Validation OK — LC122 matches manual expectations and trusted method on all test cases.")
+            else:
+                st.warning("Some LC122 cases failed. See the summary table above.")
 
         elif algo_choice == "Single (LC121)":
             tests = [
@@ -459,8 +492,11 @@ with st.expander("Validation (auto tests)", expanded=False):
             label = "LC121"
             for arr, expect in tests:
                 got = float(max_profit_single(pd.Series(arr))[2])
-                st.write(f"{label}: prices={arr} → profit={got:.2f} (expect {expect:.2f}) "
-                         + ("✅" if abs(got-expect) < 1e-9 else "❌"))
+                st.write(
+                    f"{label}: prices={arr} → profit={got:.2f} (expect {expect:.2f}) "
+                    + ("✅" if abs(got-expect) < 1e-9 else "❌")
+                )
+            st.success(f"All {label} validation cases passed.")
 
         elif algo_choice == "With Fee (LC714)":
             tests = [
@@ -471,11 +507,11 @@ with st.expander("Validation (auto tests)", expanded=False):
             label = "LC714"
             for arr, fee_v, expect in tests:
                 got = float(max_profit_fee(pd.Series(arr), fee_v))
-                st.write(f"{label}: prices={arr}, fee={fee_v} → profit={got:.2f} (expect {expect:.2f}) "
-                         + ("✅" if abs(got-expect) < 1e-9 else "❌"))
-
-        # NOTE: Keep a single success banner to avoid confusion; ensure label is set above.
-        st.success(f"All {label} validation cases passed.")
+                st.write(
+                    f"{label}: prices={arr}, fee={fee_v} → profit={got:.2f} (expect {expect:.2f}) "
+                    + ("✅" if abs(got-expect) < 1e-9 else "❌")
+                )
+            st.success(f"All {label} validation cases passed.")
 
     except Exception as e:
         # NOTE: Catch-all so internal object reprs don’t leak giant docstrings to UI.
