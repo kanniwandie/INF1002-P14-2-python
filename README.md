@@ -1,5 +1,6 @@
 How to Run the Project
-Requirements
+
+Requirements:
 
 Python 3.9 or higher
 
@@ -43,3 +44,36 @@ Look for a link like:
 http://localhost:8501
 
 Click it (or paste into a browser) — the dashboard will open. 
+
+3. Project Structure
+-------------------------------------
+Project/
+├── .vscode/
+│   ├── launch.json
+│   ├── settings.json
+├── pages/
+│   ├── 1_Simple Moving Average.py
+│   ├── 2_Upward and Downward Runs.py      
+│   ├── 3_Daily Returns.py    
+│   ├── 4_Maximum Profit Calculation.py         
+│   └── 5_Live Stock.py     
+├── scr/
+│   ├── Calculations/
+│   │   ├── __init__.py
+│   │   ├── daily_returns.py
+│   │   ├── lc121_single.py
+│   │   ├── lc714_fee.py
+│   │   ├── max_profit.py
+│   │   ├── sma.py
+│   │   ├── trade_utils.py
+│   │   └── updown_runs.py
+│   ├── data/
+│   │   ├── __init__.py
+│   │   ├── data_processing.py
+│   │   ├── data.py
+│   │   └── yfinance_client.py         
+│   ├── Visualization/
+│   │   ├── sma_chart.py
+│   │   └── updown_chart.py
+├── .gitignore                     
+└── Starting_page.py            
