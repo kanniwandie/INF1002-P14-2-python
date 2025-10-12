@@ -1,6 +1,4 @@
-# src/Calculations/daily_returns.py
-def dr_calc(df, index):
-    """
+"""
     Compute the single-day percentage return at a given row index.
 
     Formula:
@@ -18,7 +16,9 @@ def dr_calc(df, index):
     Notes:
         - Will raise if index == 0 (no previous day) or if "Close" is missing.
         - Assumes previous close (P_{t-1}) is nonzero.
-    """
+"""
+
+def dr_calc(df, index):
     dc = float(df.loc[index, "Close"])
     pc = float(df.loc[index-1,"Close"])
     daily_return = ((dc-pc)/pc)*100

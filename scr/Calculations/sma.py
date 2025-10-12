@@ -11,35 +11,41 @@ import pandas as pd
 import numpy as np
 def compute_sma(series: pd.Series, window: int = 5) -> pd.Series:
     """
-    Compute the Simple Moving Average (SMA) manually over a 1-D Series.
+    Compute the Simple Moving Average (SMA) for a one-dimensional numeric Series.
 
-    For each index i:
-        - If fewer than `window` observations are available (i + 1 < window),
-          the result is NaN.
-        - Otherwise, return the arithmetic mean of the last `window` values.
+    The SMA at each index represents the average of the most recent `window` 
+    observations. If there are fewer than `window` data points available, 
+    the result is NaN for that position.
 
     Args:
-        series (pd.Series): Input numeric series (e.g., Close prices) in
-            chronological order.
-        window (int): Window length for the moving average (>= 1 recommended).
+        series (pd.Series): Input numeric series (e.g., stock closing prices) 
+            in chronological order.
+        window (int): The number of consecutive observations to average. 
+            Must be a positive integer.
 
     Returns:
-        pd.Series: SMA series aligned to `series.index`, with NaN for the
-        initial positions that lack enough history.
+        pd.Series: A Series of SMA values aligned with the input index. 
+        The first `window - 1` positions will be NaN due to insufficient data.
 
     Notes:
-        - If `window` <= 0, this implementation will raise (e.g., division by
-          zero). Use a positive integer window.
-        - Non-numeric entries are not coerced; provide a numeric Series.
+        - Use a positive integer for `window`; non-positive values are invalid.
+        - This function does not coerce non-numeric values—ensure the input 
+          Series is numeric before calling.
     """
     # Manually compute the Simple Moving Average (SMA).
-    sma_values = []
-    for i in range(len(series)):
-        if i + 1 < window:
-            sma_values.append(np.nan)  # not enough data
-        else:
-            window_vals = series[i + 1 - window : i + 1]  # last window values
-            sma_values.append(window_vals.sum() / window)
+    sma_values = [np.nan] * len(series)
+    if window <= 0 or len(series) < window:
+        return pd.Series(sma_values, index=series.index)
+
+    # Initialize first window sum
+    window_sum = series.iloc[:window].sum()
+    sma_values[window - 1] = window_sum / window
+
+    # Slide the window forward one step at a time
+    for i in range(window, len(series)):
+        window_sum += series.iloc[i] - series.iloc[i - window]  # add new, remove old
+        sma_values[i] = window_sum / window
+
     return pd.Series(sma_values, index=series.index)
 
 
