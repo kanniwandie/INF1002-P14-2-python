@@ -1,13 +1,4 @@
 # INF1002 P14_2
-## Teamlist
-
-| **Name**                | **Student ID** |
-|--------------------------|----------------|
-| Chen Xiyuan             | 2502962        |
-| Pyie Sone Khain Min      | 2502597        |
-| Lin Min Thaw             | 2500010        |
-| Teo Jit Yu Arthur        | 2500358        |
-| Pyae Phyo Thu            | 2502277        |
 
 How to Run the Project
 
@@ -90,4 +81,14 @@ Project/
 ├── .gitignore                     
 └── Starting_page.py       
 ```
+
+## Teamlist
+
+| **Name**                | **Student ID** |
+|--------------------------|----------------|
+| Chen Xiyuan             | 2502962        |
+| Pyie Sone Khain Min      | 2502597        |
+| Lin Min Thaw             | 2500010        |
+| Teo Jit Yu Arthur        | 2500358        |
+| Pyae Phyo Thu            | 2502277        |
 
