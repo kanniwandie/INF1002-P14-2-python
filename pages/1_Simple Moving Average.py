@@ -24,7 +24,7 @@ st.title("📐 Simple Moving Average (SMA)")
 st.caption("Compute SMA over your loaded price series. The validation below checks our implementation against a trusted baseline (pandas).")
 
 # -----------------------------
-# Ensure dataset is loaded
+# Ensure dataset is retrieved
 # -----------------------------
 if "data" not in st.session_state or st.session_state["data"] is None:
     st.warning("Please load data from the Home page first.")

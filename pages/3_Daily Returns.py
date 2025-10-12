@@ -23,17 +23,16 @@ st.set_page_config(page_title="💹 Daily Returns")
 st.title("💹 Daily Returns")
 
 # -----------------------------
-# Ensure dataset is available
+# Ensure dataset is retrieved
 # -----------------------------
-# Ensuring relevant data is retrieved 
+
 if "data" not in st.session_state or st.session_state["data"] is None:
     st.warning("Please load data from the Home page first.")
     st.stop()
 
 # -----------------------------
-# Date selection & explanation
+# Date selection 
 # -----------------------------
-# Selection of date for daily returns
 st.caption("Daily returns calculated using formula: rₜ = (Pₜ - Pₜ₋₁) / Pₜ₋₁ with daily **Close** prices.")
 default_date = st.session_state["cfg"]["start"]
 selected_date_custom = st.date_input(
@@ -48,14 +47,16 @@ dropdown_date = pd.Timestamp(selected_date_custom)
 # -----------------------------
 # Lookup & display selected day result
 # -----------------------------
+
 df = st.session_state["data"].copy()
 matching_index = df.index[df["Date"] == dropdown_date]
 dropdown_date_str = dropdown_date.strftime("%Y-%m-%d")
 
 st.subheader("Selected Date Details:")
 sc, pc, dr = st.columns(3)
-
+# -----------------------------
 # Searching for date selected through dataset
+
 if len(matching_index) > 0:
     index = matching_index[0]
     if index != 0:
@@ -79,8 +80,7 @@ st.line_chart(df, x="Date", y="Close", width=0, height=0, use_container_width=Tr
 
 # -----------------------------
 # Sidebar status
-# -----------------------------
-# Sidebar status 
+# ----------------------------- 
 with st.sidebar.expander("App status", expanded=True):
     cfg = st.session_state["cfg"]
     st.write(f"**Ticker:** {cfg['ticker']}")
