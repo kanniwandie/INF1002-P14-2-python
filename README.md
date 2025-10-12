@@ -1,4 +1,4 @@
-#INF1002 P14_2
+# INF1002 P14_2
 
 How to Run the Project
 
