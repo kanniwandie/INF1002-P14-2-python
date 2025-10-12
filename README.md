@@ -53,7 +53,7 @@ Click it (or paste into a browser) — the dashboard will open.
 Project/
 ├── .vscode/
 │   ├── launch.json
-│   ├── settings.json
+│   └── settings.json
 ├── pages/
 │   ├── 1_Simple Moving Average.py
 │   ├── 2_Upward and Downward Runs.py      
@@ -77,7 +77,7 @@ Project/
 │   │   └── yfinance_client.py         
 │   ├── Visualization/
 │   │   ├── sma_chart.py
-│   │   └── updown_chart.py
+│   └── └── updown_chart.py
 ├── .gitignore                     
 └── Starting_page.py       
 ```
